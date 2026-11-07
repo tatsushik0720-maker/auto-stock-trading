@@ -6,7 +6,7 @@
     python run.py --config 別の設定.yaml
 
 ※実際の注文は一切出しません。
-※段階3の時点では「設定の表示」「データ取得・点検」「戦略の合図の一覧」までです。
+※段階4の時点では、合図の一覧と架空売買の結果（CSV）までです。評価とグラフは段階5。
 """
 
 from __future__ import annotations
@@ -19,6 +19,7 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 from sim.config import Config, ConfigError, load_config  # noqa: E402
 from sim.data_loader import DataError, load_all, summarize  # noqa: E402
+from sim.simulator import Costs, run_simulation, summarize_result, write_outputs  # noqa: E402
 from sim.strategies import (  # noqa: E402
     Signal, StrategyError, create_strategy, generate_signals, signal_changes,
 )
@@ -84,6 +85,16 @@ def main(argv: list[str] | None = None) -> int:
     for p in prices.values():
         signals = generate_signals(strategy, p.symbol, p.df)
         print(format_signal_changes(p.symbol, signals, show=args.show_signals))
+
+    print("\n=== 架空売買の結果 ===")
+    result = run_simulation(
+        {s: p.df for s, p in prices.items()},
+        {s.code: s.lot_size for s in cfg.symbols},
+        strategy, cfg.account.initial_cash, cfg.account.monthly_deposit,
+        Costs(cfg.costs.fee_rate, cfg.costs.slippage_rate, cfg.costs.tax_rate))
+    print(summarize_result(result))
+    paths = write_outputs(result, cfg.paths.output_dir)
+    print("記録: " + ", ".join(str(p) for p in paths.values()))
     return 0
 
 

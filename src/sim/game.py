@@ -25,6 +25,7 @@
 from __future__ import annotations
 
 import json
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
 
 import pandas as pd
@@ -52,7 +53,11 @@ def strategy_label(name: str, params: dict) -> str:
 
 def markers(result: SimResult, dates: pd.DatetimeIndex) -> list[dict]:
     """売買の印。売り=exit、売りのあと（または最初）の買い=entry、それ以外の買い=topup（積立分）。"""
-    t = result.trades_df()
+    return markers_from(result.trades_df(), dates)
+
+
+def markers_from(t: pd.DataFrame, dates: pd.DatetimeIndex) -> list[dict]:
+    """売買の表（列 date・side・symbol・shares）から印を作る。"""
     if t.empty:
         return []
     t = t.assign(date=pd.to_datetime(t["date"])).sort_values("date", kind="stable")
@@ -107,6 +112,93 @@ def dataset(benchmark: SimResult, players: dict[str, SimResult], initial_cash: f
         "symbols": symbols,
         "benchmark": player("benchmark", benchmark_label, benchmark, dates),
         "players": [player(f"p{k}", name, r, dates) for k, (name, r) in enumerate(players.items())],
+    }
+
+
+# ============================================================
+# フォワードテスト（forward/ の記録から作る）
+# ============================================================
+
+WEEKDAYS = "月火水木金土日"
+RESULT_TIME = time(18, 45)   # 毎日の実行が終わるおおよその時刻
+
+
+def next_result_day(start: date, now: datetime) -> date:
+    """最初の結果が出る見込みの日（開始日以降の、まだ処理していない平日）。"""
+    d = max(start, now.date())
+    if d == now.date() and now.time() >= RESULT_TIME:
+        d += timedelta(days=1)
+    while d.weekday() >= 5:
+        d += timedelta(days=1)
+    return d
+
+
+def forward_dataset(folder: Path, benchmark: str, initial_cash: float, symbols: list[str],
+                    start: date, now: datetime) -> dict:
+    """forward/log.csv と trades.csv から、画面の「フォワードテスト」モードのデータを作る。
+
+    記録がまだ0日分なら {"empty": True, "message": ...} を返す。
+    """
+    meta = {"kind": "forward", "start": start.isoformat(),
+            "updated_at": now.isoformat(timespec="minutes")}
+    log_path = Path(folder) / "log.csv"
+    log = (pd.read_csv(log_path, encoding="utf-8-sig", dtype={"戦略id": str})
+           if log_path.exists() else pd.DataFrame())
+    if log.empty:
+        d = next_result_day(start, now)
+        return {**meta, "empty": True,
+                "message": f"開始前：最初の結果は{d.month}/{d.day}({WEEKDAYS[d.weekday()]})の夕方"}
+    log["日付"] = pd.to_datetime(log["日付"])
+    dates = pd.DatetimeIndex(sorted(log["日付"].unique()))
+    trades_path = Path(folder) / "trades.csv"
+    trades = (pd.read_csv(trades_path, encoding="utf-8-sig", dtype={"戦略id": str})
+              if trades_path.exists() else pd.DataFrame(columns=["戦略id"]))
+
+    def one(sid: str) -> dict:
+        rows = log[log["戦略id"] == sid].set_index("日付")
+        eq = rows["資産"].astype(float).reindex(dates)
+        dep = rows["投入総額"].astype(float).reindex(dates)
+        first = eq.first_valid_index()
+        label = rows["戦略"].iloc[-1]
+        if first != dates[0]:     # 後から足した戦略は、足した日まで初期資金のまま表示する
+            label += f"（{first:%m/%d}〜）"
+        eq, dep = eq.fillna(initial_cash).ffill(), dep.fillna(initial_cash).ffill()
+        pf = pd.DataFrame({"equity": eq, "deposited": dep})
+        twr = twr_index(pf)
+        dd = twr / twr.cummax() - 1
+        trough = dd.idxmin()
+        t = trades[trades["戦略id"] == sid]
+        tt = pd.DataFrame({"date": pd.to_datetime(t.get("日付", pd.Series(dtype=str))),
+                           "side": t.get("売買"), "symbol": t.get("銘柄"),
+                           "shares": t.get("口数")})
+        return {
+            "id": sid, "label": label,
+            "equity": [round(float(v)) for v in eq], "twr": [round(float(v), 5) for v in twr],
+            "markers": markers_from(tt, dates),
+            "summary": {
+                "final_equity": round(eq.iloc[-1]), "pnl": round(eq.iloc[-1] - dep.iloc[-1]),
+                "pnl_pct": round((eq.iloc[-1] - dep.iloc[-1]) / dep.iloc[-1], 5),
+                "max_drawdown": round(float(dd.min()), 5),
+                "dd_peak": twr.loc[:trough].idxmax().strftime("%Y-%m-%d") if dd.min() < 0 else None,
+                "n_trades": len(t), "n_sells": int((t.get("売買") == "売り").sum()) if len(t) else 0,
+                "slippage": round(float(t["値差の負担額"].sum())) if len(t) else 0,
+                "fee": round(float(t["手数料"].sum())) if len(t) else 0,
+                "tax": round(float(t["税の精算額"].sum())) if len(t) else 0,
+            },
+        }
+
+    ids = list(dict.fromkeys(log["戦略id"]))
+    if benchmark not in ids:
+        raise ValueError(f"forward/log.csv に比べる相手（{benchmark}）の記録がありません")
+    bench_rows = log[log["戦略id"] == benchmark].set_index("日付")
+    deposited = bench_rows["投入総額"].astype(float).reindex(dates).ffill().fillna(initial_cash)
+    return {
+        **meta,
+        "dates": [d.strftime("%Y-%m-%d") for d in dates],
+        "deposited": [round(float(v)) for v in deposited],
+        "initial": round(initial_cash), "symbols": symbols,
+        "benchmark": one(benchmark),
+        "players": [one(i) for i in ids if i != benchmark],
     }
 
 

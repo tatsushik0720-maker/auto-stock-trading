@@ -163,3 +163,60 @@ def test_forward_config_checks():
                      ({"start": None}, "start")]:
         with pytest.raises(ConfigError, match=msg):
             parse_config({**base, "forward": {**ok, **bad}})
+
+
+# ---- 対戦画面（forward/game.html） --------------------------------
+
+from sim.forward import write_game_page  # noqa: E402
+from sim.game import forward_dataset, next_result_day  # noqa: E402
+
+
+def game_data(path):
+    import re
+    html = path.read_text(encoding="utf-8")
+    return json.loads(re.search(r"const GAME = (.*?);\n", html).group(1).replace(r"<\/", "</"))
+
+
+@pytest.mark.parametrize("now, expected", [
+    (datetime(2026, 11, 8, 10, 0, tzinfo=JST), date(2026, 11, 9)),    # 日曜 → 月曜
+    (datetime(2026, 11, 9, 12, 0, tzinfo=JST), date(2026, 11, 9)),    # 月曜の昼 → その日の夕方
+    (datetime(2026, 11, 9, 19, 0, tzinfo=JST), date(2026, 11, 10)),   # 月曜の夜（祝日で無かった）→ 翌日
+    (datetime(2026, 11, 13, 20, 0, tzinfo=JST), date(2026, 11, 16)),  # 金曜の夜 → 月曜
+])
+def test_next_result_day(now, expected):
+    assert next_result_day(date(2026, 11, 8), now) == expected
+
+
+def test_forward_dataset_before_start(tmp_path):
+    d = forward_dataset(tmp_path, "hold", 500000, ["A"], date(2026, 11, 8),
+                        datetime(2026, 11, 8, 10, 0, tzinfo=JST))
+    assert d["empty"] and d["message"] == "開始前：最初の結果は11/9(月)の夕方"
+
+
+def test_forward_dataset_from_records(tmp_path):
+    run_daily(tmp_path)
+    d = forward_dataset(tmp_path, "hold", 500000, ["A", "B"], START, evening(END))
+    log = pd.read_csv(tmp_path / "log.csv", encoding="utf-8-sig")
+    days = sorted(log["日付"].unique())
+    assert d["kind"] == "forward" and d["dates"] == days
+    hold = log[log["戦略id"] == "hold"]
+    assert d["benchmark"]["equity"] == [round(v) for v in hold["資産"]]
+    assert d["deposited"][-1] == 510000
+    sma = d["players"][0]
+    assert sma["id"] == "sma5" and sma["label"] == "移動平均5日"
+    trades = pd.read_csv(tmp_path / "trades.csv", encoding="utf-8-sig")
+    assert sma["summary"]["n_trades"] == int((trades["戦略id"] == "sma5").sum())
+    kinds = {m["kind"] for m in sma["markers"]}
+    assert {"entry", "exit"} <= kinds
+
+
+def test_write_game_page_has_both_modes(tmp_path):
+    cfg = config(tmp_path)
+    run_forward(cfg, upto(date(2024, 6, 7)), evening(date(2024, 6, 7)))
+    page = write_game_page(cfg, upto(date(2024, 6, 7)), evening(date(2024, 6, 7)))
+    assert page == tmp_path / "game.html"
+    data = game_data(page)
+    replay, forward = data["modes"]["replay"], data["modes"]["forward"]
+    assert replay["dates"][0] == "2023-10-02"           # 過去のリプレイは config の period から
+    assert [p["label"] for p in replay["players"]] == ["移動平均5日"]
+    assert forward["dates"] == ["2024-06-03", "2024-06-04", "2024-06-05", "2024-06-06", "2024-06-07"]

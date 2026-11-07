@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 import subprocess
 import sys
 from datetime import datetime, timedelta
@@ -23,7 +24,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from sim.config import ConfigError, load_config  # noqa: E402
 from sim.data_loader import JST, DataError, load_all  # noqa: E402
-from sim.forward import ForwardError, run_forward, summary_text  # noqa: E402
+from sim.forward import ForwardError, run_forward, summary_text, write_game_page  # noqa: E402
 from sim.state import StateError  # noqa: E402
 from sim.strategies import StrategyError, create_strategy  # noqa: E402
 
@@ -70,15 +71,26 @@ def run(args) -> int:
     # 平均を出すために、開始日より前のデータも読む
     warmup = max(create_strategy(s.name, s.params).warmup_days() for s in fwd.strategies)
     data_start = fwd.start - timedelta(days=int(warmup * 1.5) + 30)
+    # 対戦画面の「過去のリプレイ」用に、バックテストの開始日からのデータも読む
+    data_start = min(data_start, cfg.period.start)
     prices = load_all([s.code for s in cfg.symbols], data_start, None, cfg.paths.data_dir)
     for pr in prices.values():
         for w in pr.warnings:
+            # 開始日より前の日付だけについての注意（古いデータの欠けなど）は、通知に出さない
+            days = re.findall(r"\d{4}-\d{2}-\d{2}", w)
+            if days and max(days) < fwd.start.isoformat():
+                continue
             print(f"[注意] {pr.symbol}: {w}")
         print(f"株価: {pr.symbol} 最新 {pr.df.index[-1].date()}（{pr.source}）")
 
     report = run_forward(cfg, {s: pr.df for s, pr in prices.items()}, now,
                          write=not args.dry_run)
     text = summary_text(report)
+
+    # 対戦画面（forward/game.html）を作り直す。新しい日がない日は、ファイルがなければ作るだけ
+    game = fwd.dir / "game.html"
+    if not args.dry_run and (report.changed or not game.exists()):
+        write_game_page(cfg, {s: pr.df for s, pr in prices.items()}, now, game)
 
     pushed = ""
     if report.changed and not args.dry_run and not args.no_push:

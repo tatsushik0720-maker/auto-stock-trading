@@ -187,6 +187,38 @@ td.win { color: var(--gold); font-weight: 800; }
 .res-btns { display: flex; gap: 8px; margin-top: 16px; }
 .res-btns button { flex: 1; min-height: 46px; border-radius: 12px; font-weight: 800; border: 1px solid var(--line); background: var(--panel-2); }
 .res-btns button.main { background: var(--gold); color: #061024; border-color: var(--gold); }
+/* フォワードテスト: 今日の対戦結果 */
+.today { background: linear-gradient(160deg, #1f2752, #151a2e 60%); border: 1px solid #3a447a; border-radius: 18px; padding: 14px 12px 12px; margin-top: 10px; box-shadow: 0 10px 30px rgba(20, 30, 90, .35); }
+.today-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.today-head .t { font-size: 14px; font-weight: 900; color: var(--gold); letter-spacing: .04em; }
+.today-head .d { font-size: 11px; color: var(--muted); font-weight: 600; white-space: nowrap; }
+.today-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+.tcol { background: rgba(11, 14, 26, .45); border-radius: 12px; padding: 10px; min-width: 0; border: 1px solid var(--line); }
+.tcol .nm { font-size: 13px; font-weight: 800; }
+.tcol.s .nm { color: var(--strat); } .tcol.b .nm { color: var(--bench); }
+.tcol .big { font-size: clamp(22px, 7.2vw, 30px); font-weight: 900; margin-top: 4px; white-space: nowrap; }
+.tcol .big .yen { font-size: .5em; color: var(--muted); margin-left: 2px; }
+.tcol .chg { font-size: 15px; font-weight: 800; margin-top: 2px; white-space: nowrap; }
+.tcol .chg small { font-size: 10px; color: var(--muted); font-weight: 600; margin-right: 4px; }
+.chg.pos { color: var(--buy); } .chg.neg { color: var(--sell); } .chg.zero { color: var(--muted); }
+.tcol .tr { font-size: 11px; margin-top: 6px; line-height: 1.5; color: var(--muted); overflow-wrap: anywhere; }
+.tcol .tr .buy { color: var(--buy); } .tcol .tr .sell { color: var(--sell); }
+.today-lead { text-align: center; margin-top: 10px; font-weight: 900; }
+.today-lead .w { font-size: 15px; } .today-lead .a { font-size: clamp(26px, 8.5vw, 34px); margin-left: 6px; }
+.today-lead.s { color: var(--strat); } .today-lead.b { color: var(--bench); } .today-lead.e { color: var(--muted); }
+.today-lead .y { display: block; font-size: 11px; color: var(--muted); font-weight: 600; margin-top: 2px; }
+.totals { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 10px; }
+.totals .cap { font-size: 11px; color: var(--muted); font-weight: 700; }
+.tbar { display: flex; height: 10px; border-radius: 99px; overflow: hidden; margin-top: 6px; background: var(--panel-2); }
+.tbar span { display: block; height: 100%; }
+.tnums { display: flex; justify-content: space-between; gap: 6px; margin-top: 6px; font-size: 12px; font-weight: 800; }
+.tnums .s { color: var(--strat); } .tnums .b { color: var(--bench); } .tnums .e { color: var(--muted); }
+.updated { font-size: 10px; color: var(--muted); text-align: right; margin-top: 8px; }
+.empty-card { margin-top: 24px; background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 36px 16px; text-align: center; }
+.empty-card .big { font-size: clamp(20px, 6.4vw, 26px); font-weight: 900; line-height: 1.5; }
+.empty-card .big b { color: var(--gold); }
+.empty-card .sub { font-size: 12px; color: var(--muted); margin-top: 12px; line-height: 1.7; }
+
 .empty { text-align: center; padding: 40px 10px; color: var(--muted); font-size: 14px; line-height: 1.8; }
 
 @media (prefers-reduced-motion: reduce) {
@@ -210,6 +242,8 @@ td.win { color: var(--gold); font-weight: 800; }
       <div class="pick" id="pickWrap"><select id="pick" aria-label="戦略くんの中身（対戦相手）"></select></div>
       <div class="date num" id="date">----</div>
     </div>
+
+    <section class="today" id="today" hidden aria-label="今日の対戦結果"></section>
 
     <div class="board" style="margin-top:10px">
       <div class="card s" id="cardS">
@@ -263,7 +297,7 @@ td.win { color: var(--gold); font-weight: 800; }
     <p class="note">架空売買のシミュレーションです。実際の注文は出していません。<br>
       資産は積立の入金を含む額。最大の落ち込みは入金の影響を除いて計算しています。</p>
   </div>
-  <div id="emptyMode" class="empty" hidden></div>
+  <div id="emptyMode" hidden></div>
 </div>
 
 <div class="over" id="over">
@@ -294,7 +328,8 @@ const GAME = /*__GAME_DATA__*/null;
   const signedYen = (v) => (v >= 0 ? "+" : "−") + yen(Math.abs(v)) + "円";
   const pctText = (v, d = 1) => (v >= 0 ? "+" : "−") + Math.abs(v * 100).toFixed(d) + "%";
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  const DAYS_PER_SEC = 10;   // 1倍 = 1秒に10営業日
+  // 1倍 = 1秒に10営業日。フォワードテストで日数が少ないうち（60日以下）は1秒に1日
+  const daysPerSec = () => (ds && ds.kind === "forward" && ds.dates.length <= 60 ? 1 : 10);
 
   const css = getComputedStyle(document.documentElement);
   const C = Object.fromEntries(["strat", "bench", "buy", "sell", "gold", "deposit", "muted", "line", "ink"]
@@ -315,8 +350,18 @@ const GAME = /*__GAME_DATA__*/null;
     document.querySelectorAll("#modes button").forEach((b) => {
       b.classList.toggle("on", b.dataset.mode === m);
       const has = GAME && GAME.modes && GAME.modes[b.dataset.mode];
-      if (b.dataset.mode === "forward") b.innerHTML = "フォワードテスト" + (has ? "" : '<span class="soon">準備中</span>');
+      if (b.dataset.mode === "forward") b.innerHTML = "フォワードテスト" +
+        (!has ? '<span class="soon">準備中</span>' : has.empty ? '<span class="soon">開始前</span>' : "");
     });
+    if (data && data.empty) {     // フォワードテストの記録がまだ0日分
+      pause(); mode = m;
+      const [head, rest] = String(data.message).split("：");
+      $("main").hidden = true; $("emptyMode").hidden = false;
+      $("emptyMode").innerHTML = `<div class="empty-card"><div class="big">${escapeHtml(head)}${rest ? "：<br><b>" + escapeHtml(rest) + "</b>" : ""}</div>
+        <div class="sub">開始日 ${escapeHtml(data.start)}。架空の資金で「戦略くん」と「放置くん」が毎日対戦します。<br>
+        平日の夕方に自動で更新されます。</div></div>`;
+      return;
+    }
     if (!data) {
       if (m !== "replay" && ds) { say(m === "forward" ? "フォワードテストのデータはまだありません" : "データがありません", ""); setMode(mode); return; }
       $("main").hidden = true; $("emptyMode").hidden = false;
@@ -333,6 +378,7 @@ const GAME = /*__GAME_DATA__*/null;
     $("first").textContent = ds.dates[0];
     $("last").textContent = ds.dates[ds.dates.length - 1];
     $("labelB").textContent = B.label;
+    $("today").hidden = ds.kind !== "forward";
     setPlayer(0);
   }
 
@@ -341,8 +387,49 @@ const GAME = /*__GAME_DATA__*/null;
     $("labelS").textContent = P.label;
     $("pick").value = String(k);
     buildScenes();
-    seek(0);
+    // フォワードテストは「今日」の画面から始める（再生すると開始日から）
+    seek(ds.kind === "forward" ? ds.dates.length - 1 : 0);
     pause();
+    if (ds.kind === "forward") renderToday();
+  }
+
+  // ---------------- フォワードテスト: 今日の対戦結果と通算成績 ----------------
+  const md = (d) => { const t = new Date(d + "T00:00:00"); return `${t.getMonth() + 1}/${t.getDate()}(${"日月火水木金土"[t.getDay()]})`; };
+  function renderToday() {
+    const L = ds.dates.length - 1;
+    const dep = ds.deposited;
+    const change = (pl) => (L > 0 ? pl.equity[L] - pl.equity[L - 1] - (dep[L] - dep[L - 1]) : pl.equity[0] - dep[0]);
+    const tradesOf = (pl) => {
+      const ms = pl.markers.filter((m) => m.i === L);
+      if (!ms.length) return "売買なし";
+      return ms.map((m) => `<span class="${m.side}">${escapeHtml(m.symbol)} ${m.side === "buy" ? (m.kind === "topup" ? "積立で買い増し" : "買い") : "全部売り"} ${m.shares.toLocaleString("ja-JP")}口</span>`).join("<br>");
+    };
+    const col = (pl, cls, name) => {
+      const c = change(pl);
+      return `<div class="tcol ${cls}"><div class="nm">${name}</div>
+        <div class="big num">${yen(pl.equity[L])}<span class="yen">円</span></div>
+        <div class="chg num ${c > 0 ? "pos" : c < 0 ? "neg" : "zero"}"><small>今日</small>${signedYen(c)}</div>
+        <div class="tr">${tradesOf(pl)}</div></div>`;
+    };
+    const lead = P.equity[L] - B.equity[L];
+    const prev = L > 0 ? P.equity[L - 1] - B.equity[L - 1] : 0;
+    const leadHtml = Math.abs(lead) < 1
+      ? `<div class="today-lead e"><span class="w">互角</span><span class="a num">0円</span></div>`
+      : `<div class="today-lead ${lead > 0 ? "s" : "b"}"><span class="w">${lead > 0 ? "戦略リード" : "放置リード"}</span><span class="a num">+${yen(Math.abs(lead))}円</span>
+         <span class="y num">${L > 0 ? `前の日より戦略くんが ${signedYen(lead - prev)}` : "初日"}</span></div>`;
+    let win = 0, lose = 0, tie = 0;
+    for (let j = 0; j <= L; j++) { const l = P.equity[j] - B.equity[j]; if (Math.abs(l) < 1) tie++; else if (l > 0) win++; else lose++; }
+    const n = L + 1, w = (x) => (x / n * 100).toFixed(1) + "%";
+    $("today").innerHTML = `
+      <div class="today-head"><span class="t">今日の対戦結果</span><span class="d num">${md(ds.dates[L])}・${n}営業日目</span></div>
+      <div class="today-grid">${col(P, "s", "戦略くん")}${col(B, "b", "放置くん")}</div>
+      ${leadHtml}
+      <div class="totals">
+        <div class="cap">開始（${md(ds.dates[0])}）からの通算 ${n}営業日</div>
+        <div class="tbar"><span style="width:${w(win)};background:var(--strat)"></span><span style="width:${w(tie)};background:var(--muted)"></span><span style="width:${w(lose)};background:var(--bench)"></span></div>
+        <div class="tnums num"><span class="s">戦略リード ${win}日</span><span class="e">同点 ${tie}日</span><span class="b">戦略ビハインド ${lose}日</span></div>
+      </div>
+      <div class="updated num">更新 ${escapeHtml(String(ds.updated_at).replace("T", " ").slice(0, 16))}</div>`;
   }
 
   function escapeHtml(s) {
@@ -375,7 +462,7 @@ const GAME = /*__GAME_DATA__*/null;
     const dt = Math.min(0.1, (t - lastT) / 1000 || 0);
     lastT = t;
     if (playing && ds) {
-      pos += dt * DAYS_PER_SEC * speed;
+      pos += dt * daysPerSec() * speed;
       const target = Math.min(ds.dates.length - 1, Math.floor(pos));
       while (day < target) { day++; onNewDay(day); }
       if (day >= ds.dates.length - 1) { pos = day; pause(); if (!finished) { finished = true; say("決着！", "g"); setTimeout(showResult, 1300); } }
@@ -430,8 +517,9 @@ const GAME = /*__GAME_DATA__*/null;
 
   function renderLog() {
     const rows = [];
-    const all = P.markers.filter((m) => m.i <= day).slice(-3).reverse();
-    for (const m of all) rows.push(logLine("戦略くん", m));
+    const all = [...P.markers.map((m) => ["戦略くん", m]), ...B.markers.map((m) => ["放置くん", m])]
+      .filter(([, m]) => m.i <= day).sort((a, b) => a[1].i - b[1].i).slice(-3).reverse();
+    for (const [who, m] of all) rows.push(logLine(who, m));
     if (!rows.length) rows.push('<div class="small">まだ売買はありません</div>');
     $("log").innerHTML = rows.join("");
   }
@@ -478,7 +566,7 @@ const GAME = /*__GAME_DATA__*/null;
     if (ms.length || mb.length) {
       shake(now);
       renderLog();
-    } else if ((mapS.get(i) || []).length) renderLog();
+    } else if ((mapS.get(i) || []).length || (mapB.get(i) || []).length) renderLog();
 
     // 実況
     if (ms.length && i - ev.lastTradeCall > 15) {
@@ -579,13 +667,21 @@ const GAME = /*__GAME_DATA__*/null;
       ctx.fillText((v / 10000).toFixed(dec) + "万", padL - 4, y);
     }
     ctx.textAlign = "center"; ctx.textBaseline = "top";
-    let lastYear = null, lastX = -99;
-    for (let j = 0; j < n; j++) {
-      const y = ds.dates[j].slice(0, 4);
-      if (y !== lastYear) {
-        lastYear = y;
-        const x = X(j);
-        if (x - lastX > 26 && j > 0) { ctx.fillText("'" + y.slice(2), x, H - padB + 5); lastX = x; }
+    if (n <= 260) {     // 1年に満たないときは「月/日」で5つほど
+      const every = Math.max(1, Math.ceil(n / 5));
+      for (let j = 0; j < n; j += every) {
+        const [, mo, da] = ds.dates[j].split("-");
+        ctx.fillText(`${+mo}/${+da}`, Math.max(padL + 12, X(j)), H - padB + 5);
+      }
+    } else {
+      let lastYear = null, lastX = -99;
+      for (let j = 0; j < n; j++) {
+        const y = ds.dates[j].slice(0, 4);
+        if (y !== lastYear) {
+          lastYear = y;
+          const x = X(j);
+          if (x - lastX > 26 && j > 0) { ctx.fillText("'" + y.slice(2), x, H - padB + 5); lastX = x; }
+        }
       }
     }
 
@@ -724,6 +820,7 @@ const GAME = /*__GAME_DATA__*/null;
     const a = P.summary, b = B.summary;
     const diff = a.final_equity - b.final_equity;
     const wn = $("winName");
+    document.querySelector(".winner .k").textContent = ds.kind === "forward" ? "いまリードしているのは" : "勝者";
     if (Math.abs(diff) < 1) { wn.textContent = "引き分け"; wn.style.color = C.gold; $("winDiff").textContent = ""; }
     else {
       wn.textContent = diff > 0 ? "戦略くん" : "放置くん";
@@ -760,7 +857,10 @@ const GAME = /*__GAME_DATA__*/null;
   });
 
   setSpeed(1);
-  setMode("replay");
+  // フォワードテストの記録があれば、そちらを先に開く（#replay / #forward でも選べる）
+  const fw = GAME && GAME.modes && GAME.modes.forward;
+  const want = location.hash.slice(1);
+  setMode(want === "replay" || want === "forward" ? want : fw && !fw.empty ? "forward" : "replay");
   requestAnimationFrame((t) => { lastT = t; frame(t); });
 })();
 </script>

@@ -383,3 +383,36 @@ def _append_csv(path: Path, df: pd.DataFrame) -> None:
         df.to_csv(path, mode="a", header=False, index=False, encoding="utf-8")
     else:
         df.to_csv(path, index=False, encoding="utf-8-sig")
+
+
+# ============================================================
+# 対戦画面（forward/game.html）
+# ============================================================
+
+def write_game_page(cfg: Config, prices: dict[str, pd.DataFrame], now: datetime,
+                    path: Path | None = None) -> Path:
+    """「過去のリプレイ」と「フォワードテスト」の両方が入った対戦画面を書き出す。
+
+    過去のリプレイ: フォワードテストと同じ戦略で、config の period（2018年〜）を通しで動かした結果
+    フォワードテスト: forward/log.csv と trades.csv の記録（0日分なら「開始前」と表示）
+    """
+    from .game import dataset, forward_dataset, write_game
+
+    fwd = cfg.forward
+    lots = {s.code: s.lot_size for s in cfg.symbols}
+    costs = Costs(cfg.costs.fee_rate, cfg.costs.slippage_rate, cfg.costs.tax_rate)
+    start = pd.Timestamp(cfg.period.start)
+    hist = {s: prices[s][prices[s].index >= start] for s in lots}
+    sims = {}
+    for spec in fwd.strategies:
+        sims[spec.id] = run_simulation(hist, lots, create_strategy(spec.name, spec.params),
+                                       cfg.account.initial_cash, cfg.account.monthly_deposit,
+                                       costs)
+    labels = {spec.id: _label(spec) for spec in fwd.strategies}
+    symbols = list(lots)
+    replay = dataset(sims[fwd.benchmark],
+                     {labels[i]: r for i, r in sims.items() if i != fwd.benchmark},
+                     cfg.account.initial_cash, symbols, labels[fwd.benchmark])
+    forward = forward_dataset(fwd.dir, fwd.benchmark, cfg.account.initial_cash, symbols,
+                              fwd.start, now)
+    return write_game(path or fwd.dir / "game.html", replay, forward)

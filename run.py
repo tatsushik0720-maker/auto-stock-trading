@@ -14,13 +14,14 @@ from __future__ import annotations
 
 import argparse
 import sys
+from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 from sim.config import Config, ConfigError, load_config  # noqa: E402
-from sim.data_loader import DataError, load_all, summarize  # noqa: E402
-from sim.game import dataset, strategy_label, write_game  # noqa: E402
+from sim.data_loader import JST, DataError, load_all, summarize  # noqa: E402
+from sim.game import dataset, forward_dataset, strategy_label, write_game  # noqa: E402
 from sim.evaluate import (  # noqa: E402
     comparison_table, exposure_by_symbol, format_yearly, plot_comparison, yearly_comparison,
 )
@@ -131,7 +132,12 @@ def main(argv: list[str] | None = None) -> int:
     # 対戦ゲーム風の画面（ブラウザで開くだけで見られる）
     replay = dataset(benchmark, {strategy_label(cfg.strategy.name, cfg.strategy.params): result},
                      cfg.account.initial_cash, [s.code for s in cfg.symbols])
-    paths["game"] = write_game(out / "game.html", replay)
+    forward = None
+    if cfg.forward is not None:   # フォワードテストの記録も同じ画面で見られるように
+        fwd = cfg.forward
+        forward = forward_dataset(fwd.dir, fwd.benchmark, cfg.account.initial_cash,
+                                  [s.code for s in cfg.symbols], fwd.start, datetime.now(JST))
+    paths["game"] = write_game(out / "game.html", replay, forward)
     print("\n出力: " + ", ".join(str(p) for p in paths.values()))
     return 0
 

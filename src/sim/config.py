@@ -66,6 +66,24 @@ class ComparisonConfig:
 
 
 @dataclass(frozen=True)
+class ForwardStrategyConfig:
+    """フォワードテストで動かす戦略1つ分。id は保存ファイルの名前に使う。"""
+    id: str
+    name: str
+    params: dict[str, Any] = field(default_factory=dict)
+    start: date | None = None    # 後から足した戦略の開始日（書かなければ forward.start）
+
+
+@dataclass(frozen=True)
+class ForwardConfig:
+    """フォワードテスト（forward.py 用）の設定。"""
+    start: date
+    dir: Path
+    benchmark: str               # 比べる相手（「放置」）の id
+    strategies: tuple[ForwardStrategyConfig, ...]
+
+
+@dataclass(frozen=True)
 class Config:
     symbols: tuple[SymbolConfig, ...]
     period: PeriodConfig
@@ -74,6 +92,7 @@ class Config:
     strategy: StrategyConfig
     paths: PathConfig
     comparison: ComparisonConfig | None = None   # 書いていなければ None
+    forward: ForwardConfig | None = None         # 書いていなければ None
 
 
 # ------------------------------------------------------------
@@ -109,6 +128,7 @@ def parse_config(raw: Any, base_dir: Path = Path(".")) -> Config:
         strategy=_parse_strategy(raw.get("strategy")),
         paths=_parse_paths(raw.get("paths", {}), base_dir),
         comparison=_parse_comparison(raw.get("comparison")),
+        forward=_parse_forward(raw.get("forward"), base_dir),
     )
 
 
@@ -229,6 +249,44 @@ def _parse_comparison(raw: Any) -> ComparisonConfig | None:
             raise ConfigError(f"comparison.candidates に同じ戦略が2回あります: {c.name} {c.params}")
         seen.add(key)
     return ComparisonConfig(select_period=select, check_period=check, candidates=cands)
+
+
+_ID_CHARS = set("abcdefghijklmnopqrstuvwxyz0123456789_-")
+
+
+def _parse_forward(raw: Any, base_dir: Path) -> ForwardConfig | None:
+    if raw is None:
+        return None
+    raw = _require_dict(raw, "forward")
+    start = _to_date(raw.get("start"), "forward.start")
+    if start is None:
+        raise ConfigError("forward.start（フォワードテストの開始日）を書いてください")
+    items = raw.get("strategies")
+    if not isinstance(items, list) or not items:
+        raise ConfigError("forward.strategies に動かす戦略を1つ以上書いてください")
+    strategies = []
+    for k, item in enumerate(items):
+        where = f"forward.strategies の {k + 1} 番目"
+        item = _require_dict(item, where)
+        sid = item.get("id")
+        if not isinstance(sid, str) or not sid or not set(sid) <= _ID_CHARS:
+            raise ConfigError(f"{where}: id は半角の小文字・数字・_・- で書いてください"
+                              f"（保存ファイルの名前になります）。今: {sid!r}")
+        base = _parse_strategy({"name": item.get("name"), "params": item.get("params")})
+        own_start = _to_date(item.get("start"), f"{where}.start")
+        if own_start is not None and own_start < start:
+            raise ConfigError(f"{where}: start（{own_start}）は forward.start（{start}）より前にできません")
+        strategies.append(ForwardStrategyConfig(sid, base.name, base.params, own_start))
+    ids = [s.id for s in strategies]
+    dup = sorted({i for i in ids if ids.count(i) > 1})
+    if dup:
+        raise ConfigError(f"forward.strategies の id が重なっています: {', '.join(dup)}")
+    bench = raw.get("benchmark")
+    if bench not in ids:
+        raise ConfigError(f"forward.benchmark には strategies の id のどれかを書いてください"
+                          f"（今: {bench!r}、使える id: {', '.join(ids)}）")
+    return ForwardConfig(start=start, dir=base_dir / raw.get("dir", "forward"),
+                         benchmark=bench, strategies=tuple(strategies))
 
 
 def _parse_period_named(raw: Any, where: str) -> PeriodConfig:

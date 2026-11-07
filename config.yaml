@@ -63,3 +63,16 @@ comparison:
     - {name: sma_cooldown, params: {window: 25, cooldown: 20}}
     - {name: sma_cooldown, params: {window: 75, cooldown: 20}}
     - {name: sma_cooldown, params: {window: 200, cooldown: 20}}
+
+# フォワードテスト（python forward.py で使う。毎日1回、平日の夕方に実行する）
+# 銘柄・資金・積立・コストは上の設定をそのまま使う。始めたあとに上の設定を変えると、
+# 保存した口座と合わなくなるため forward.py はエラーで止まる（混ぜないため）。
+forward:
+  start: "2026-11-08"      # 開始日。この日以降の取引日から架空売買する
+  dir: forward             # 状態と記録の保存先
+  benchmark: hold          # 比べる相手（「放置」）の id
+  strategies:
+    # id は保存ファイルの名前（半角の小文字・数字・_・-）。一度決めたら変えない
+    # 後から戦略を足すときは start に足した日を書く（書かないと上の開始日からさかのぼって動かす）
+    - {id: sma25, name: sma_cross, params: {window: 25}}
+    - {id: hold, name: buy_and_hold}

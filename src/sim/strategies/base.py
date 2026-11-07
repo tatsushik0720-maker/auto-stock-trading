@@ -73,6 +73,13 @@ class Strategy(ABC):
         """判断を始めるのに必要な日数（それまでは HOLD）。"""
         return 0
 
+    def params(self) -> dict[str, Any]:
+        """この戦略のパラメータ。口座の状態ファイルに控え、再開時の設定確認に使う。"""
+        return {}
+
+    # 注意（フォワードテスト用）: decide() は「その日までの株価」と ctx だけから判断し、
+    # 戦略の中に前日からの記憶を持たないこと。再開時に記憶が失われても結果が変わらないため。
+
 
 def generate_signals(strategy: Strategy, symbol: str, prices: pd.DataFrame,
                      extras_by_date: Mapping[date, Mapping[str, Any]] | None = None

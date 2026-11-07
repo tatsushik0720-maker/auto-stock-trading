@@ -94,6 +94,9 @@ def main(argv: list[str] | None = None) -> int:
         Costs(cfg.costs.fee_rate, cfg.costs.slippage_rate, cfg.costs.tax_rate))
     print(summarize_result(result))
     paths = write_outputs(result, cfg.paths.output_dir)
+    # 終了時の口座の状態（将来のフォワードテストは、このファイルから再開する）
+    paths["state"] = cfg.paths.output_dir / "state.json"
+    result.state.save(paths["state"])
     print("記録: " + ", ".join(str(p) for p in paths.values()))
     return 0
 

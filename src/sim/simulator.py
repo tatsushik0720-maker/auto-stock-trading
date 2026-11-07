@@ -20,18 +20,23 @@
     税率 0 なら何もしない。
   - 資金配分: 初期資金と積立額を銘柄数で等分し、銘柄ごとに独立して運用する。
     税だけは口座全体で通算する（銘柄Aの損と銘柄Bの益を相殺する）。
+
+再開（フォワードテスト用）:
+  口座の状態は SimState（state.py）にまとめてあり、ファイルに保存できる。
+  run_simulation(..., state=保存した状態) で、続きの日だけを処理する。
 """
 
 from __future__ import annotations
 
 import math
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from datetime import date
 from pathlib import Path
 from typing import Any, Mapping
 
 import pandas as pd
 
+from .state import AccountState, SimState, TaxBook, make_settings
 from .strategies.base import DayContext, Signal, Strategy
 
 EPS = 1e-9  # 浮動小数点の誤差よけ
@@ -77,11 +82,17 @@ class SimResult:
     portfolio: pd.DataFrame      # 全銘柄合計の日次記録（cash, market_value, equity, deposited）
     trades: list[Trade]
     missed_buys: list[MissedBuy]
-    tax_by_year: dict[int, float]
+    state: SimState              # 終了時の口座の状態（保存すれば次回そこから再開できる）
 
     def trades_df(self) -> pd.DataFrame:
-        return pd.DataFrame([asdict(t) for t in self.trades],
-                            columns=[f for f in Trade.__dataclass_fields__])
+        df = pd.DataFrame([asdict(t) for t in self.trades],
+                          columns=[f for f in Trade.__dataclass_fields__])
+        df["realized_pnl"] = df["realized_pnl"].astype(float)  # 買いの行は空欄(NaN)
+        return df
+
+    @property
+    def tax_by_year(self) -> dict[int, float]:
+        return {y: v for y, v in self.state.tax.by_year.items()}
 
     @property
     def total_fee(self) -> float:
@@ -97,53 +108,11 @@ class SimResult:
 
     @property
     def final_equity(self) -> float:
-        return float(self.portfolio["equity"].iloc[-1])
+        return self.state.equity
 
     @property
     def total_deposited(self) -> float:
-        return float(self.portfolio["deposited"].iloc[-1])
-
-
-@dataclass
-class _Account:
-    """銘柄ごとの小さな口座。"""
-    symbol: str
-    lot: int
-    cash: float
-    deposited: float
-    shares: int = 0
-    cost: float = 0.0              # 保有分の取得総額（手数料込み）
-    last_month: tuple[int, int] | None = None
-    pending: Signal | None = None  # 翌取引日に約定させる注文
-
-    @property
-    def avg_cost(self) -> float:
-        return self.cost / self.shares if self.shares else 0.0
-
-
-@dataclass
-class _TaxBook:
-    """口座全体の、その年の通算損益と払った税。"""
-    rate: float
-    year: int | None = None
-    realized: float = 0.0
-    paid: float = 0.0
-    by_year: dict[int, float] = field(default_factory=dict)
-
-    def new_day(self, day: pd.Timestamp) -> None:
-        if day.year != self.year:
-            self.year, self.realized, self.paid = day.year, 0.0, 0.0
-
-    def settle(self, pnl: float) -> float:
-        """売却の実現損益を通算し、精算する税額（+支払い/−還付）を返す。"""
-        self.realized += pnl
-        if self.rate <= 0:
-            return 0.0
-        due = math.floor(max(0.0, self.realized) * self.rate + EPS)
-        delta = due - self.paid
-        self.paid = due
-        self.by_year[self.year] = due
-        return float(delta)
+        return self.state.deposited
 
 
 # ============================================================
@@ -153,34 +122,52 @@ class _TaxBook:
 def run_simulation(prices: Mapping[str, pd.DataFrame], lot_sizes: Mapping[str, int],
                    strategy: Strategy, initial_cash: float, monthly_deposit: float,
                    costs: Costs,
-                   extras_by_date: Mapping[date, Mapping[str, Any]] | None = None
-                   ) -> SimResult:
-    """全銘柄の架空売買を行う。prices は銘柄ごとの日足（行が無い日は取引なし）。"""
+                   extras_by_date: Mapping[date, Mapping[str, Any]] | None = None,
+                   state: SimState | None = None) -> SimResult:
+    """全銘柄の架空売買を行う。prices は銘柄ごとの日足（行が無い日は取引なし）。
+
+    state を渡すと、その状態から再開する（最後に処理した日より後の日だけを処理する）。
+    渡さなければ初期資金から始める。結果の result.state を保存すれば次回再開できる。
+    戦略には、再開前の日も含めた「その日までの全データ」が渡る。
+    """
     symbols = list(prices)
     if not symbols:
         raise ValueError("銘柄がありません")
     n = len(symbols)
     extras_by_date = extras_by_date or {}
-    accounts = {s: _Account(s, int(lot_sizes[s]), initial_cash / n, initial_cash / n)
-                for s in symbols}
+    settings = make_settings({s: lot_sizes[s] for s in symbols}, initial_cash,
+                             monthly_deposit, costs, strategy.name, strategy.params())
+    if state is None:
+        state = SimState.new(settings)
+        first_day = min(prices[s].index[0] for s in symbols if len(prices[s]))
+        for acc in state.accounts.values():
+            acc.last_month = (first_day.year, first_day.month)  # 積立は開始月の翌月から
+    else:
+        state = SimState.from_dict(state.to_dict())  # 渡された状態は書き換えない
+        state.check_settings(settings)
+    accounts, tax = state.accounts, state.tax
+
+    # 再開前の各銘柄の資産（合計の表を作るときの起点）
+    before = {s: {"cash": a.cash, "market_value": a.equity - a.cash,
+                  "equity": a.equity, "deposited": a.deposited}
+              for s, a in accounts.items()}
     position = {s: {d: i for i, d in enumerate(prices[s].index)} for s in symbols}
     all_days = sorted(set().union(*(set(prices[s].index) for s in symbols)))
-    start_month = (all_days[0].year, all_days[0].month)
-    for acc in accounts.values():
-        acc.last_month = start_month  # 積立は開始月の翌月から
 
-    tax = _TaxBook(costs.tax_rate)
     trades: list[Trade] = []
     missed: list[MissedBuy] = []
     records: list[dict] = []
 
     for day in all_days:
-        tax.new_day(day)
         for s in symbols:
             i = position[s].get(day)
+            acc = accounts[s]
             if i is None:
                 continue  # この銘柄はこの日取引なし
-            df, acc = prices[s], accounts[s]
+            if acc.last_date is not None and day <= acc.last_date:
+                continue  # 前回までに処理済み
+            tax.new_day(day)
+            df = prices[s]
             bar = df.iloc[i]
 
             # 1. 積立
@@ -197,9 +184,8 @@ def run_simulation(prices: Mapping[str, pd.DataFrame], lot_sizes: Mapping[str, i
                 _sell(acc, day, float(bar["Open"]), costs, tax, trades)
             acc.pending = None
 
-            # 3. 終値で記録
+            # 3. 終値で記録 / 4. 戦略の判断（翌取引日の注文になる）
             close = float(bar["Close"])
-            # 4. 戦略の判断（翌取引日の注文になる）
             ctx = DayContext(symbol=s, date=day, prices=df.iloc[:i + 1], position=acc.shares,
                              extras=extras_by_date.get(day.date(), {}))
             decision = strategy.decide(ctx)
@@ -207,21 +193,25 @@ def run_simulation(prices: Mapping[str, pd.DataFrame], lot_sizes: Mapping[str, i
                 acc.pending = Signal.BUY
             elif decision.signal is Signal.SELL and acc.shares > 0:
                 acc.pending = Signal.SELL
+            acc.last_date, acc.last_close = day, close
 
             records.append({
                 "date": day, "symbol": s, "close": close, "signal": decision.signal.value,
                 "cash": acc.cash, "shares": acc.shares, "avg_cost": acc.avg_cost,
                 "market_value": acc.shares * close,
-                "equity": acc.cash + acc.shares * close, "deposited": acc.deposited,
+                "equity": acc.equity, "deposited": acc.deposited,
             })
 
-    daily = pd.DataFrame(records).set_index("date")
-    portfolio = _portfolio(daily, symbols, initial_cash / n)
+    columns = ["symbol", "close", "signal", "cash", "shares", "avg_cost",
+               "market_value", "equity", "deposited"]
+    daily = (pd.DataFrame(records).set_index("date") if records
+             else pd.DataFrame(columns=columns, index=pd.DatetimeIndex([], name="date")))
+    portfolio = _portfolio(daily, symbols, before)
     return SimResult(daily=daily, portfolio=portfolio, trades=trades, missed_buys=missed,
-                     tax_by_year=dict(tax.by_year))
+                     state=state)
 
 
-def _buy(acc: _Account, day, open_price: float, costs: Costs,
+def _buy(acc: AccountState, day, open_price: float, costs: Costs,
          trades: list[Trade], missed: list[MissedBuy]) -> None:
     price = open_price * (1 + costs.slippage_rate)
     lot_cost = acc.lot * price * (1 + costs.fee_rate)
@@ -241,7 +231,7 @@ def _buy(acc: _Account, day, open_price: float, costs: Costs,
                         acc.cash))
 
 
-def _sell(acc: _Account, day, open_price: float, costs: Costs, tax: _TaxBook,
+def _sell(acc: AccountState, day, open_price: float, costs: Costs, tax: TaxBook,
           trades: list[Trade]) -> None:
     shares = acc.shares
     price = open_price * (1 - costs.slippage_rate)
@@ -257,18 +247,17 @@ def _sell(acc: _Account, day, open_price: float, costs: Costs, tax: _TaxBook,
                         acc.cash))
 
 
-def _portfolio(daily: pd.DataFrame, symbols: list[str], initial_each: float) -> pd.DataFrame:
+def _portfolio(daily: pd.DataFrame, symbols: list[str],
+               before: dict[str, dict[str, float]]) -> pd.DataFrame:
     """銘柄ごとの記録を合計する。取引のない日は、その銘柄の直前の記録で評価する
     （価格データを埋めるのではなく、資産額の表示のためだけ）。"""
     cols = ["cash", "market_value", "equity", "deposited"]
-    start_fill = {"cash": initial_each, "market_value": 0.0,
-                  "equity": initial_each, "deposited": initial_each}
-    total = None
+    index = daily.index.unique().sort_values()
+    total = pd.DataFrame(0.0, index=index, columns=cols)
     for s in symbols:
-        part = daily[daily["symbol"] == s][cols]
-        total_index = daily.index.unique().sort_values()
-        part = part.reindex(total_index).ffill().fillna(start_fill)
-        total = part if total is None else total + part
+        part = daily[daily["symbol"] == s][cols].astype(float)
+        part = part.reindex(index).ffill().fillna(before[s])
+        total += part
     return total
 
 

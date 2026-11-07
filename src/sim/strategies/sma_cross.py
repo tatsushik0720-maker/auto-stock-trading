@@ -22,6 +22,9 @@ class SmaCross(Strategy):
     def warmup_days(self) -> int:
         return self.window
 
+    def params(self) -> dict:
+        return {"window": self.window}
+
     def decide(self, ctx: DayContext) -> Decision:
         close = ctx.prices["Close"]
         if len(close) < self.window:

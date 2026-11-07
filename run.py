@@ -6,7 +6,8 @@
     python run.py --config 別の設定.yaml
 
 ※実際の注文は一切出しません。
-結果は output/ に出ます（売買記録・日次記録・比較表・年ごとの損益・グラフ・口座の状態）。
+結果は output/ に出ます（売買記録・日次記録・比較表・年ごとの損益・グラフ・口座の状態・
+対戦ゲーム風の画面 game.html）。
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 from sim.config import Config, ConfigError, load_config  # noqa: E402
 from sim.data_loader import DataError, load_all, summarize  # noqa: E402
+from sim.game import dataset, strategy_label, write_game  # noqa: E402
 from sim.evaluate import (  # noqa: E402
     comparison_table, exposure_by_symbol, format_yearly, plot_comparison, yearly_comparison,
 )
@@ -126,6 +128,10 @@ def main(argv: list[str] | None = None) -> int:
     paths["summary"], paths["yearly"] = out / "summary.csv", out / "yearly.csv"
     paths["chart"] = plot_comparison(result, benchmark, out / "equity.png",
                                      f"戦略（{cfg.strategy.name}）", "最初に買って放置")
+    # 対戦ゲーム風の画面（ブラウザで開くだけで見られる）
+    replay = dataset(benchmark, {strategy_label(cfg.strategy.name, cfg.strategy.params): result},
+                     cfg.account.initial_cash, [s.code for s in cfg.symbols])
+    paths["game"] = write_game(out / "game.html", replay)
     print("\n出力: " + ", ".join(str(p) for p in paths.values()))
     return 0
 

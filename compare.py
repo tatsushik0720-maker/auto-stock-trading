@@ -6,7 +6,7 @@
 
 やること:
   1. comparison.candidates の戦略と「最初に買って放置」を、同じ資金・積立・コストで
-     通しで動かす（途中で口座をリセットしない。実際に続けて運用した場合と同じ）
+     選ぶ期間の初日から通しで動かす（途中で口座をリセットしない）
   2. 成績を「選ぶ期間」と「確かめる期間」に分けて測る
   3. 選ぶ期間の年率リターンが一番良い戦略を選び、確かめる期間でも放置と比べる
 
@@ -29,23 +29,11 @@ import pandas as pd  # noqa: E402
 from sim.config import ConfigError, load_config  # noqa: E402
 from sim.data_loader import DataError, load_all, summarize  # noqa: E402
 from sim.evaluate import PeriodMetrics, period_metrics  # noqa: E402
+from sim.game import dataset, strategy_label as label, write_game  # noqa: E402
 from sim.simulator import Costs, run_simulation  # noqa: E402
 from sim.strategies import StrategyError, create_strategy  # noqa: E402
 
 BENCH = "最初に買って放置"
-
-
-def label(name: str, params: dict) -> str:
-    """表に出す戦略の名前。"""
-    w = params.get("window", 25)
-    if name == "sma_cross":
-        return f"移動平均{w}日"
-    if name == "sma_band":
-        b = params.get("band", 0.02)
-        return f"移動平均{w}日 ±{b:.0%}帯"
-    if name == "sma_cooldown":
-        return f"移動平均{w}日 {params.get('cooldown', 20)}日あけ"
-    return f"{name} {params}"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -97,11 +85,15 @@ def main(argv: list[str] | None = None) -> int:
                 {s.code: s.lot_size for s in cfg.symbols})
     money = (cfg.account.initial_cash, cfg.account.monthly_deposit,
              Costs(cfg.costs.fee_rate, cfg.costs.slippage_rate, cfg.costs.tax_rate))
-    print(f"\n=== 架空売買（{len(strategies) + 1}通り、データ {data_start}〜） ===")
-    results = {BENCH: run_simulation(*sim_args, create_strategy("buy_and_hold"), *money)}
+    print(f"\n=== 架空売買（{len(strategies) + 1}通り、{cmp.select_period.start}から売買。"
+          f"平均の計算用にデータは {data_start}〜） ===")
+    # 売買と入金は選ぶ期間の初日から。それより前のデータは平均を出すためだけに使う
+    start = cmp.select_period.start
+    results = {BENCH: run_simulation(*sim_args, create_strategy("buy_and_hold"), *money,
+                                     start=start)}
     for name, strat in strategies.items():
         print(f"  {name} …")
-        results[name] = run_simulation(*sim_args, strat, *money)
+        results[name] = run_simulation(*sim_args, strat, *money, start=start)
 
     sel = {n: period_metrics(r, cmp.select_period.start, cmp.select_period.end)
            for n, r in results.items()}
@@ -122,7 +114,12 @@ def main(argv: list[str] | None = None) -> int:
     out = cfg.paths.output_dir
     out.mkdir(parents=True, exist_ok=True)
     table.to_csv(out / "compare.csv", encoding="utf-8-sig")
-    print(f"\n出力: {out / 'compare.csv'}")
+    # 対戦ゲーム風の画面。選ぶ期間で良かった順に並べ、上の「相手」で切り替えられる
+    order = [n for n in table.index if n != BENCH]
+    game = write_game(out / "game_compare.html",
+                      dataset(results[BENCH], {n: results[n] for n in order},
+                              cfg.account.initial_cash, [s.code for s in cfg.symbols]))
+    print(f"\n出力: {out / 'compare.csv'}, {game}")
     return 0
 
 

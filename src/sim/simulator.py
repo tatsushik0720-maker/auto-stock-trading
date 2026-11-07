@@ -123,14 +123,19 @@ def run_simulation(prices: Mapping[str, pd.DataFrame], lot_sizes: Mapping[str, i
                    strategy: Strategy, initial_cash: float, monthly_deposit: float,
                    costs: Costs,
                    extras_by_date: Mapping[date, Mapping[str, Any]] | None = None,
-                   state: SimState | None = None) -> SimResult:
+                   state: SimState | None = None,
+                   start: date | None = None) -> SimResult:
     """全銘柄の架空売買を行う。prices は銘柄ごとの日足（行が無い日は取引なし）。
 
     state を渡すと、その状態から再開する（最後に処理した日より後の日だけを処理する）。
     渡さなければ初期資金から始める。結果の result.state を保存すれば次回再開できる。
     戦略には、再開前の日も含めた「その日までの全データ」が渡る。
+
+    start を渡すと、その日より前は売買も入金もせず、戦略が判断に使う過去データとしてだけ使う
+    （長い平均の戦略も、開始日から合図を出せるようにするため）。
     """
     symbols = list(prices)
+    start_ts = pd.Timestamp(start) if start is not None else None
     if not symbols:
         raise ValueError("銘柄がありません")
     n = len(symbols)
@@ -139,7 +144,11 @@ def run_simulation(prices: Mapping[str, pd.DataFrame], lot_sizes: Mapping[str, i
                              monthly_deposit, costs, strategy.name, strategy.params())
     if state is None:
         state = SimState.new(settings)
-        first_day = min(prices[s].index[0] for s in symbols if len(prices[s]))
+        days = [d for s in symbols for d in prices[s].index
+                if start_ts is None or d >= start_ts]
+        if not days:
+            raise ValueError(f"{start} 以降の株価データがありません")
+        first_day = min(days)
         for acc in state.accounts.values():
             acc.last_month = (first_day.year, first_day.month)  # 積立は開始月の翌月から
     else:
@@ -158,6 +167,8 @@ def run_simulation(prices: Mapping[str, pd.DataFrame], lot_sizes: Mapping[str, i
     missed: list[MissedBuy] = []
     records: list[dict] = []
 
+    if start_ts is not None:
+        all_days = [d for d in all_days if d >= start_ts]
     for day in all_days:
         for s in symbols:
             i = position[s].get(day)

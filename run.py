@@ -6,7 +6,7 @@
     python run.py --config 別の設定.yaml
 
 ※実際の注文は一切出しません。
-※段階4の時点では、合図の一覧と架空売買の結果（CSV）までです。評価とグラフは段階5。
+結果は output/ に出ます（売買記録・日次記録・比較表・年ごとの損益・グラフ・口座の状態）。
 """
 
 from __future__ import annotations
@@ -19,6 +19,9 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 from sim.config import Config, ConfigError, load_config  # noqa: E402
 from sim.data_loader import DataError, load_all, summarize  # noqa: E402
+from sim.evaluate import (  # noqa: E402
+    comparison_table, exposure_by_symbol, format_yearly, plot_comparison, yearly_comparison,
+)
 from sim.simulator import Costs, run_simulation, summarize_result, write_outputs  # noqa: E402
 from sim.strategies import (  # noqa: E402
     Signal, StrategyError, create_strategy, generate_signals, signal_changes,
@@ -87,17 +90,43 @@ def main(argv: list[str] | None = None) -> int:
         print(format_signal_changes(p.symbol, signals, show=args.show_signals))
 
     print("\n=== 架空売買の結果 ===")
-    result = run_simulation(
-        {s: p.df for s, p in prices.items()},
-        {s.code: s.lot_size for s in cfg.symbols},
-        strategy, cfg.account.initial_cash, cfg.account.monthly_deposit,
-        Costs(cfg.costs.fee_rate, cfg.costs.slippage_rate, cfg.costs.tax_rate))
+    sim_args = ({s: p.df for s, p in prices.items()},
+                {s.code: s.lot_size for s in cfg.symbols})
+    money = (cfg.account.initial_cash, cfg.account.monthly_deposit,
+             Costs(cfg.costs.fee_rate, cfg.costs.slippage_rate, cfg.costs.tax_rate))
+    result = run_simulation(*sim_args, strategy, *money)
+    # 比較用: 同じ資金・積立・コストで「最初に買って放置」
+    benchmark = run_simulation(*sim_args, create_strategy("buy_and_hold"), *money)
     print(summarize_result(result))
-    paths = write_outputs(result, cfg.paths.output_dir)
+
+    out = cfg.paths.output_dir
+    paths = write_outputs(result, out)
+    paths.update({f"放置_{k}": v for k, v in
+                  write_outputs(benchmark, out, prefix="buy_and_hold_").items()})
     # 終了時の口座の状態（将来のフォワードテストは、このファイルから再開する）
-    paths["state"] = cfg.paths.output_dir / "state.json"
+    paths["state"] = out / "state.json"
     result.state.save(paths["state"])
-    print("記録: " + ", ".join(str(p) for p in paths.values()))
+
+    names = {"戦略": result, "放置": benchmark}
+    print(f"\n=== 評価: 戦略（{cfg.strategy.name}）と「最初に買って放置」の比較 ===")
+    table = comparison_table(names)
+    print(table.to_string())
+    print("\n株を持っていた日の割合（銘柄別、戦略）: " + ", ".join(
+        f"{s} {v:.1%}" for s, v in exposure_by_symbol(result.daily).items()))
+
+    print("\n=== 年ごとの損益 ===")
+    yearly = yearly_comparison(names)
+    print(format_yearly(yearly))
+    wins = (yearly["勝ち"] == "戦略").sum()
+    print(f"戦略が勝った年: {wins} / {len(yearly)}年"
+          "（勝ち負けは時間加重リターンで判定。最初と最後の年は1年に満たない）")
+
+    table.to_csv(out / "summary.csv", encoding="utf-8-sig")
+    yearly.to_csv(out / "yearly.csv", encoding="utf-8-sig")
+    paths["summary"], paths["yearly"] = out / "summary.csv", out / "yearly.csv"
+    paths["chart"] = plot_comparison(result, benchmark, out / "equity.png",
+                                     f"戦略（{cfg.strategy.name}）", "最初に買って放置")
+    print("\n出力: " + ", ".join(str(p) for p in paths.values()))
     return 0
 
 

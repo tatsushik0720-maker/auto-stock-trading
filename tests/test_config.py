@@ -32,6 +32,7 @@ def test_repository_config_yaml_is_valid():
     """リポジトリ同梱の config.yaml が読めて、指定どおりの初期値になっている。"""
     cfg = load_config(ROOT / "config.yaml")
     assert [s.code for s in cfg.symbols] == ["1321.T", "1306.T"]
+    assert [s.lot_size for s in cfg.symbols] == [10, 10]  # JPX 公式の売買単位
     assert cfg.account.initial_cash == 500000
     assert cfg.account.monthly_deposit == 10000
     assert cfg.costs.fee_rate == 0.0

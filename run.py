@@ -6,7 +6,7 @@
     python run.py --config 別の設定.yaml
 
 ※実際の注文は一切出しません。
-※段階1の時点では「設定を読み込んで内容を表示する」だけです。
+※段階2の時点では「設定の表示」と「データ取得・点検」までです。
 """
 
 from __future__ import annotations
@@ -18,6 +18,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 from sim.config import Config, ConfigError, load_config  # noqa: E402
+from sim.data_loader import DataError, load_all, summarize  # noqa: E402
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -58,6 +59,16 @@ def main(argv: list[str] | None = None) -> int:
         print(f"[設定エラー] {e}", file=sys.stderr)
         return 1
     print(describe(cfg))
+
+    print("\n=== データ取得と点検 ===")
+    try:
+        prices = load_all([s.code for s in cfg.symbols], cfg.period.start, cfg.period.end,
+                          cfg.paths.data_dir)
+    except DataError as e:
+        print(f"[データエラー] {e}", file=sys.stderr)
+        return 1
+    for p in prices.values():
+        print(summarize(p))
     return 0
 
 

@@ -3,272 +3,409 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f8f9ff" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#111418" media="(prefers-color-scheme: dark)">
 <title>戦略くん VS 放置くん</title>
+<!-- 文字: Roboto（数字・英字）と Noto Sans JP（日本語）。通信できないときは端末の字体で表示する -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
+/* ============================================================
+   Material Design 3 のトークン
+   色: 青（#0061A4）を基準色にした配色。戦略くん = primary、
+       放置くん・買いは区別のための追加色（M3 の custom color の tone 40/80/90/30）
+   ============================================================ */
 :root {
-  --bg: #0b0e1a;
-  --panel: #151a2e;
-  --panel-2: #1c2340;
-  --line: #2a3256;
-  --ink: #f2f4ff;
-  --muted: #8d95b8;
-  --strat: #33d1ff;
-  --bench: #ff9f43;
-  --buy: #3ce38a;
-  --sell: #ff5c7a;
-  --gold: #ffd23f;
-  --deposit: #6c7396;
-  --radius: 14px;
+  --md-primary: #0061a4; --md-on-primary: #ffffff;
+  --md-primary-container: #d1e4ff; --md-on-primary-container: #001d36;
+  --md-secondary-container: #d7e3f7; --md-on-secondary-container: #101c2b;
+  --md-error: #ba1a1a; --md-error-container: #ffdad6; --md-on-error-container: #410002;
+  --md-surface: #f8f9ff; --md-on-surface: #191c20; --md-on-surface-variant: #43474e;
+  --md-surface-container-lowest: #ffffff; --md-surface-container-low: #f2f3fa;
+  --md-surface-container: #eceef4; --md-surface-container-high: #e6e8ee;
+  --md-surface-container-highest: #e1e2e8;
+  --md-outline: #73777f; --md-outline-variant: #c3c7cf;
+  --md-inverse-surface: #2e3135; --md-inverse-on-surface: #eff0f7; --md-inverse-primary: #9ecaff;
+  --md-scrim: rgba(0, 0, 0, .32);
+  /* 対戦の2人と売買の色 */
+  --strat: var(--md-primary); --strat-c: var(--md-primary-container); --on-strat-c: var(--md-on-primary-container);
+  --bench: #8b5000; --bench-c: #ffdcbe; --on-bench-c: #2c1600;
+  --buy: #006e1c; --sell: var(--md-error);
+  --deposit: var(--md-outline);
+
+  /* 角丸・影・動き */
+  --shape-xs: 4px; --shape-sm: 8px; --shape-md: 12px; --shape-lg: 16px; --shape-xl: 28px; --shape-full: 999px;
+  --elev-1: 0 1px 2px rgba(0,0,0,.3), 0 1px 3px 1px rgba(0,0,0,.15);
+  --elev-2: 0 1px 2px rgba(0,0,0,.3), 0 2px 6px 2px rgba(0,0,0,.15);
+  --elev-3: 0 1px 3px rgba(0,0,0,.3), 0 4px 8px 3px rgba(0,0,0,.15);
+  --ease: cubic-bezier(.2, 0, 0, 1);
+  --ease-decel: cubic-bezier(.05, .7, .1, 1);
+  --font: "Roboto", "Noto Sans JP", system-ui, -apple-system, "Hiragino Sans", "Yu Gothic UI", sans-serif;
 }
+@media (prefers-color-scheme: dark) {
+  :root {
+    --md-primary: #9ecaff; --md-on-primary: #003258;
+    --md-primary-container: #00497d; --md-on-primary-container: #d1e4ff;
+    --md-secondary-container: #3b4858; --md-on-secondary-container: #d7e3f7;
+    --md-error: #ffb4ab; --md-error-container: #93000a; --md-on-error-container: #ffdad6;
+    --md-surface: #111418; --md-on-surface: #e1e2e8; --md-on-surface-variant: #c3c7cf;
+    --md-surface-container-lowest: #0b0e13; --md-surface-container-low: #191c20;
+    --md-surface-container: #1d2024; --md-surface-container-high: #272a2f;
+    --md-surface-container-highest: #32353a;
+    --md-outline: #8d9199; --md-outline-variant: #43474e;
+    --md-inverse-surface: #e1e2e8; --md-inverse-on-surface: #2e3135; --md-inverse-primary: #0061a4;
+    --bench: #ffb870; --bench-c: #693c00; --on-bench-c: #ffdcbe;
+    --buy: #78dc77;
+  }
+}
+
+/* 文字の型（M3 type scale） */
+.display-s { font-size: 36px; line-height: 44px; font-weight: 400; }
+.headline-m { font-size: 28px; line-height: 36px; font-weight: 400; }
+.headline-s { font-size: 24px; line-height: 32px; font-weight: 400; }
+.title-l { font-size: 22px; line-height: 28px; font-weight: 400; }
+.title-m { font-size: 16px; line-height: 24px; font-weight: 500; letter-spacing: .15px; }
+.title-s { font-size: 14px; line-height: 20px; font-weight: 500; letter-spacing: .1px; }
+.body-l { font-size: 16px; line-height: 24px; letter-spacing: .5px; }
+.body-m { font-size: 14px; line-height: 20px; letter-spacing: .25px; }
+.body-s { font-size: 12px; line-height: 16px; letter-spacing: .4px; }
+.label-l { font-size: 14px; line-height: 20px; font-weight: 500; letter-spacing: .1px; }
+.label-m { font-size: 12px; line-height: 16px; font-weight: 500; letter-spacing: .5px; }
+.label-s { font-size: 11px; line-height: 16px; font-weight: 500; letter-spacing: .5px; }
+
 * { box-sizing: border-box; }
-html, body { margin: 0; background: var(--bg); color: var(--ink); overflow-x: clip; }
+[hidden] { display: none !important; }
+html, body { margin: 0; overflow-x: clip; }
 body {
-  font-family: system-ui, -apple-system, "Hiragino Sans", "Yu Gothic UI", "Meiryo", sans-serif;
-  -webkit-tap-highlight-color: transparent;
-  -webkit-text-size-adjust: 100%;
+  background: var(--md-surface); color: var(--md-on-surface);
+  font-family: var(--font); font-size: 14px; line-height: 20px;
+  -webkit-tap-highlight-color: transparent; -webkit-text-size-adjust: 100%;
   min-height: 100dvh;
-  background:
-    radial-gradient(120% 60% at 50% -10%, #1b2350 0%, transparent 60%),
-    var(--bg);
 }
-.num { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+.num { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; font-family: "Roboto", var(--font); }
 button, select { font: inherit; color: inherit; }
-button { cursor: pointer; touch-action: manipulation; }
+button { cursor: pointer; touch-action: manipulation; -webkit-user-select: none; user-select: none; }
+svg.ic { width: 24px; height: 24px; fill: currentColor; flex: none; }
+svg.ic-s { width: 18px; height: 18px; fill: currentColor; flex: none; }
+
+/* 押したときの色の重なり（state layer: hover 8% / 押した 12%） */
+.st { position: relative; overflow: hidden; isolation: isolate; }
+.st::before {
+  content: ""; position: absolute; inset: 0; background: currentColor; opacity: 0;
+  transition: opacity 150ms var(--ease); pointer-events: none; z-index: -1; border-radius: inherit;
+}
+@media (hover: hover) { .st:hover::before { opacity: .08; } }
+.st:active::before { opacity: .12; }
+.st:focus-visible { outline: 2px solid var(--md-primary); outline-offset: 2px; }
+
+/* 上のアプリバー（center-aligned, 64px） */
+.topbar {
+  position: sticky; top: 0; z-index: 10;
+  padding-top: env(safe-area-inset-top);
+  background: var(--md-surface);
+  transition: background-color 200ms var(--ease), box-shadow 200ms var(--ease);
+}
+.topbar.scrolled { background: var(--md-surface-container); box-shadow: var(--elev-2); }
+.topbar .bar { height: 64px; display: flex; align-items: center; justify-content: center; padding: 0 16px; }
+.topbar h1 { margin: 0; white-space: nowrap; }
+.topbar .s { color: var(--strat); } .topbar .b { color: var(--bench); }
+.topbar .x { color: var(--md-on-surface-variant); margin: 0 8px; }
 
 .app {
-  max-width: 480px; margin: 0 auto;
-  padding: calc(10px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom));
-  display: flex; flex-direction: column; gap: 10px;
+  max-width: 560px; margin: 0 auto;
+  padding: 4px 16px calc(32px + env(safe-area-inset-bottom));
+  display: flex; flex-direction: column; gap: 12px;
 }
 
-/* モードの切り替え */
-.modes { display: flex; gap: 6px; background: var(--panel); border-radius: 999px; padding: 4px; }
-.modes button {
-  flex: 1; border: 0; background: transparent; border-radius: 999px; padding: 8px 6px;
-  font-size: 13px; font-weight: 700; color: var(--muted);
+/* セグメントボタン（高さ 40px、角丸 full、選択中は secondary-container とチェック） */
+.seg { display: flex; padding: 4px 0; }
+.seg button {
+  flex: 1; min-width: 0; height: 40px; border: 1px solid var(--md-outline); margin-left: -1px;
+  background: transparent; color: var(--md-on-surface);
+  display: flex; align-items: center; justify-content: center; gap: 8px; padding: 0 12px;
 }
-.modes button.on { background: var(--panel-2); color: var(--ink); box-shadow: inset 0 0 0 1px var(--line); }
-.modes button .soon { font-size: 10px; font-weight: 600; margin-left: 4px; opacity: .8; }
+.seg button:first-child { border-radius: var(--shape-full) 0 0 var(--shape-full); margin-left: 0; }
+.seg button:last-child { border-radius: 0 var(--shape-full) var(--shape-full) 0; }
+.seg button[aria-pressed="true"] { background: var(--md-secondary-container); color: var(--md-on-secondary-container); }
+.seg .chk { display: none; }
+.seg button[aria-pressed="true"] .chk { display: block; }
+.seg .lbl { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.badge { color: var(--md-on-surface-variant); flex: none; }
+.seg button[aria-pressed="true"] .badge { color: inherit; opacity: .8; }
+.badge:empty { display: none; }
 
-/* 見出し */
-.head { text-align: center; }
-.vs { font-size: 15px; font-weight: 800; letter-spacing: .04em; }
-.vs .s { color: var(--strat); } .vs .b { color: var(--bench); }
-.vs .x { color: var(--muted); margin: 0 6px; font-size: 12px; }
-.pick { margin-top: 6px; display: flex; justify-content: center; }
-.pick select {
-  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
-  padding: 6px 10px; font-size: 13px; max-width: 100%;
+/* 外枠のテキストフィールド（選択） */
+.field { position: relative; margin-top: 8px; }
+.field select {
+  width: 100%; height: 56px; padding: 0 44px 0 16px; border-radius: var(--shape-xs);
+  border: 1px solid var(--md-outline); background: transparent; color: var(--md-on-surface);
+  font-size: 16px; line-height: 24px; -webkit-appearance: none; appearance: none;
 }
-.date { font-size: clamp(30px, 10vw, 42px); font-weight: 900; margin-top: 4px; letter-spacing: .02em; }
-.date small { display: block; font-size: 11px; color: var(--muted); font-weight: 600; letter-spacing: 0; }
+.field select:focus { outline: none; border: 2px solid var(--md-primary); padding-left: 15px; }
+.field label {
+  position: absolute; left: 12px; top: -8px; padding: 0 4px; background: var(--md-surface);
+  color: var(--md-on-surface-variant);
+}
+.field select:focus + label { color: var(--md-primary); }
+.field .arrow { position: absolute; right: 12px; top: 16px; pointer-events: none; color: var(--md-on-surface-variant); }
 
-/* 実況 */
-.call {
-  position: fixed; left: 50%; top: calc(10px + env(safe-area-inset-top)); z-index: 20;
-  transform: translate(-50%, -140%); opacity: 0;
-  max-width: min(440px, calc(100vw - 32px)); width: max-content;
-  background: linear-gradient(135deg, #2b1f6e, #13204f);
-  border: 1px solid #5b5bd6; border-radius: 999px; padding: 10px 18px;
-  font-size: 16px; font-weight: 900; text-align: center;
-  box-shadow: 0 8px 30px rgba(80, 90, 255, .45);
-  transition: transform .28s cubic-bezier(.2, .9, .3, 1.3), opacity .2s;
-  pointer-events: none;
-}
-.call.show { transform: translate(-50%, 0); opacity: 1; }
-.call.s { border-color: var(--strat); box-shadow: 0 8px 30px rgba(51, 209, 255, .4); }
-.call.b { border-color: var(--bench); box-shadow: 0 8px 30px rgba(255, 159, 67, .4); }
-.call.d { border-color: var(--sell); box-shadow: 0 8px 30px rgba(255, 92, 122, .4); }
+/* 日付 */
+.datebox { text-align: center; padding: 4px 0; }
+.datebox .sub { color: var(--md-on-surface-variant); }
+
+/* カード（filled = surface-container-highest、outlined = 枠、elevated = 影 level1） */
+.card { border-radius: var(--shape-md); padding: 16px; min-width: 0; }
+.card.filled { background: var(--md-surface-container-highest); }
+.card.outlined { background: var(--md-surface); border: 1px solid var(--md-outline-variant); }
+.card.elevated { background: var(--md-surface-container-low); box-shadow: var(--elev-1); }
 
 /* 2人の資産 */
-.board { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.card {
-  background: var(--panel); border-radius: var(--radius); padding: 10px 12px 12px;
-  border: 1px solid var(--line); position: relative; overflow: hidden; min-width: 0;
+.board { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.player { padding: 12px; border: 2px solid transparent; transition: border-color 200ms var(--ease); }
+.player .who { display: flex; align-items: center; gap: 6px; min-height: 24px; }
+.player.s .who { color: var(--strat); } .player.b .who { color: var(--bench); }
+.player .chip-lead {
+  display: none; align-items: center; gap: 2px; height: 24px; padding: 0 8px 0 4px; border-radius: var(--shape-sm);
 }
-.card::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 3px; }
-.card.s::before { background: var(--strat); } .card.b::before { background: var(--bench); }
-.card.lead { box-shadow: 0 0 0 1px var(--gold), 0 0 18px rgba(255, 210, 63, .25); }
-.who { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 800; }
-.card.s .who { color: var(--strat); } .card.b .who { color: var(--bench); }
-.crown { font-size: 12px; color: var(--gold); visibility: hidden; }
-.card.lead .crown { visibility: visible; }
-.label { font-size: 10px; color: var(--muted); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.money { font-size: clamp(22px, 7.2vw, 30px); font-weight: 900; margin-top: 6px; line-height: 1.05; white-space: nowrap; transition: color .25s, text-shadow .25s; }
-.money .yen { font-size: .5em; margin-left: 2px; color: var(--muted); }
-.money.up { color: #b8ffd8; text-shadow: 0 0 12px rgba(60, 227, 138, .8); }
-.money.down { color: #ffc3cf; text-shadow: 0 0 12px rgba(255, 92, 122, .8); }
-.pct { font-size: 12px; font-weight: 700; margin-top: 3px; white-space: nowrap; }
-.pct .pp { display: block; font-size: 10px; font-weight: 600; opacity: .85; margin-top: 1px; }
-.pct.pos { color: var(--buy); } .pct.neg { color: var(--sell); }
+.player.s .chip-lead { background: var(--strat-c); color: var(--on-strat-c); }
+.player.b .chip-lead { background: var(--bench-c); color: var(--on-bench-c); }
+.player.lead .chip-lead { display: inline-flex; }
+.player.s.lead { border-color: var(--strat); } .player.b.lead { border-color: var(--bench); }
+.player .label { color: var(--md-on-surface-variant); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.money { margin-top: 8px; white-space: nowrap; transition: color 200ms var(--ease); font-weight: 500; }
+.money .yen { font-size: 14px; color: var(--md-on-surface-variant); margin-left: 2px; font-weight: 400; }
+.money.up { color: var(--buy); } .money.down { color: var(--sell); }
+.pct { margin-top: 4px; white-space: nowrap; }
+.pct .pp { display: block; color: var(--md-on-surface-variant); }
+.pos { color: var(--buy); } .neg { color: var(--sell); } .zero { color: var(--md-on-surface-variant); }
 
-/* リード */
-.lead-box { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; }
-.lead-text { display: flex; justify-content: center; align-items: baseline; gap: 8px; font-weight: 900; }
-.lead-text .who2 { font-size: 15px; }
-.lead-text .amt { font-size: clamp(20px, 6.4vw, 26px); }
-.lead-text.s { color: var(--strat); } .lead-text.b { color: var(--bench); } .lead-text.e { color: var(--muted); }
-.tug { position: relative; height: 8px; background: var(--panel-2); border-radius: 99px; margin-top: 8px; overflow: hidden; }
-.tug .mid { position: absolute; left: 50%; top: -2px; bottom: -2px; width: 2px; background: var(--muted); opacity: .6; }
-.tug .fill { position: absolute; top: 0; bottom: 0; border-radius: 99px; transition: left .15s, width .15s, background .2s; }
-.tug-cap { display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); margin-top: 4px; }
+/* リード（線形のしるし: 4px、角丸 full） */
+.lead-text { display: flex; justify-content: center; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.lead-text.s { color: var(--strat); } .lead-text.b { color: var(--bench); } .lead-text.e { color: var(--md-on-surface-variant); }
+.tug { position: relative; height: 4px; background: var(--md-surface-container-highest); border-radius: var(--shape-full); margin-top: 12px; }
+.tug .mid { position: absolute; left: 50%; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; background: var(--md-outline); border-radius: 1px; }
+.tug .fill { position: absolute; top: 0; bottom: 0; border-radius: var(--shape-full); transition: left 150ms var(--ease), width 150ms var(--ease); }
+.tug-cap { display: flex; justify-content: space-between; color: var(--md-on-surface-variant); margin-top: 8px; }
 
 /* グラフ */
-.chart-wrap { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 6px 4px; position: relative; }
-.chart-wrap.shake { animation: shake .35s; }
-@keyframes shake {
-  0%, 100% { transform: translate(0, 0); }
-  20% { transform: translate(-4px, 1px); } 40% { transform: translate(4px, -1px); }
-  60% { transform: translate(-3px, 0); } 80% { transform: translate(2px, 1px); }
-}
+.chart { padding: 12px 8px 8px; }
+.chart.shake { animation: shake 300ms var(--ease); }
+@keyframes shake { 0%, 100% { transform: none; } 25% { transform: translateX(-3px); } 50% { transform: translateX(3px); } 75% { transform: translateX(-2px); } }
 canvas { display: block; width: 100%; height: 240px; }
-.legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 10px; color: var(--muted); padding: 4px 6px 2px; }
-.legend i { display: inline-block; width: 12px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 4px; }
-.legend .dash { background: repeating-linear-gradient(90deg, var(--deposit) 0 3px, transparent 3px 5px); }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; color: var(--md-on-surface-variant); padding: 8px 8px 0; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { display: inline-block; width: 16px; height: 3px; border-radius: 2px; }
+.legend .dash { background: repeating-linear-gradient(90deg, var(--deposit) 0 4px, transparent 4px 7px); }
 .legend .m-b { color: var(--buy); } .legend .m-s { color: var(--sell); }
 
-/* 売買の記録 */
-.log { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 12px; font-size: 11px; color: var(--muted); min-height: 58px; }
-.log div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.55; }
-.log .buy { color: var(--buy); } .log .sell { color: var(--sell); } .log .small { opacity: .7; }
+/* 売買の記録（リスト） */
+.list { padding: 8px 0; }
+.list .h { padding: 0 16px 4px; color: var(--md-on-surface-variant); }
+.list .row-item { display: flex; align-items: center; gap: 12px; min-height: 40px; padding: 0 16px; }
+.list .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.list .dot.buy { background: var(--buy); } .list .dot.sell { background: var(--sell); } .list .dot.topup { background: var(--md-outline); }
+.list .txt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.list .when { color: var(--md-on-surface-variant); flex: none; }
+.list .empty-row { color: var(--md-on-surface-variant); padding: 8px 16px; }
 
-/* 操作 */
-.controls { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; display: flex; flex-direction: column; gap: 10px; }
-input[type=range] { width: 100%; accent-color: var(--strat); height: 28px; margin: 0; }
-.row { display: flex; gap: 8px; align-items: center; }
-.play {
-  width: 54px; height: 54px; border-radius: 50%; border: 0; flex: none;
-  background: linear-gradient(135deg, #3fe0ff, #4b7bff); color: #061024;
-  font-size: 22px; font-weight: 900; box-shadow: 0 6px 20px rgba(63, 160, 255, .45);
+/* 再生の操作 */
+.controls { display: flex; flex-direction: column; gap: 12px; }
+/* スライダー（線 4px・つまみ 20px。左側は primary） */
+input[type=range] {
+  -webkit-appearance: none; appearance: none; width: 100%; height: 48px; margin: 0; background: transparent;
+  --p: 0%;
 }
-.play:active { transform: scale(.95); }
-.speeds { display: flex; gap: 6px; flex: 1; }
-.speeds button {
-  flex: 1; min-height: 44px; border-radius: 12px; border: 1px solid var(--line);
-  background: var(--panel-2); font-weight: 800; font-size: 14px; color: var(--muted);
+input[type=range]::-webkit-slider-runnable-track {
+  height: 4px; border-radius: var(--shape-full);
+  background: linear-gradient(to right, var(--md-primary) var(--p), var(--md-secondary-container) var(--p));
 }
-.speeds button.on { color: #061024; background: var(--gold); border-color: var(--gold); }
-.range-cap { display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); margin-top: -4px; }
-.scenes-title { font-size: 11px; color: var(--muted); font-weight: 700; }
-.scenes { display: flex; flex-wrap: wrap; gap: 6px; }
-.scenes button {
-  border: 1px solid var(--line); background: var(--panel-2); border-radius: 999px;
-  padding: 8px 12px; font-size: 12px; font-weight: 700; min-height: 36px;
+input[type=range]::-moz-range-track { height: 4px; border-radius: var(--shape-full); background: var(--md-secondary-container); }
+input[type=range]::-moz-range-progress { height: 4px; border-radius: var(--shape-full); background: var(--md-primary); }
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 20px; height: 20px; border-radius: 50%; margin-top: -8px;
+  background: var(--md-primary); box-shadow: var(--elev-1); border: 0;
 }
-.scenes button b { color: var(--gold); font-weight: 800; }
-.result-btn { border: 1px solid var(--gold); color: var(--gold); background: transparent; border-radius: 12px; padding: 10px; font-weight: 800; font-size: 14px; }
+input[type=range]::-moz-range-thumb { width: 20px; height: 20px; border-radius: 50%; background: var(--md-primary); border: 0; box-shadow: var(--elev-1); }
+input[type=range]:focus-visible { outline: none; }
+input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 8px color-mix(in srgb, var(--md-primary) 12%, transparent); }
+.range-cap { display: flex; justify-content: space-between; color: var(--md-on-surface-variant); margin-top: -8px; }
+.playrow { display: flex; align-items: center; gap: 16px; }
+.playrow .seg { flex: 1; }
+/* FAB（56px・角丸 16px・primary-container・影 level3） */
+.fab {
+  width: 56px; height: 56px; border: 0; border-radius: var(--shape-lg); flex: none;
+  background: var(--md-primary-container); color: var(--md-on-primary-container);
+  display: grid; place-items: center; box-shadow: var(--elev-3);
+  transition: box-shadow 200ms var(--ease);
+}
+.fab:active { box-shadow: var(--elev-2); }
+/* 名場面のリスト（2行の行。先頭にアイコン） */
+.scene-list { display: flex; flex-direction: column; margin: 0 -16px; }
+.scene {
+  display: flex; align-items: center; gap: 16px; min-height: 64px; padding: 8px 16px; border: 0;
+  background: transparent; color: var(--md-on-surface); text-align: left; width: 100%;
+}
+.scene svg { color: var(--md-primary); }
+.scene .tx { display: flex; flex-direction: column; min-width: 0; }
+.scene .sb { color: var(--md-on-surface-variant); }
+/* チップ（高さ 32px・角丸 8px）。押せる範囲は上下に足して 48px */
+.chips { display: flex; flex-wrap: wrap; gap: 0 8px; }
+.chip {
+  height: 32px; margin: 8px 0; padding: 0 16px 0 8px; border-radius: var(--shape-sm);
+  border: 1px solid var(--md-outline-variant); background: transparent; color: var(--md-on-surface-variant);
+  display: inline-flex; align-items: center; gap: 8px; max-width: 100%; overflow: visible;
+}
+.chip::after { content: ""; position: absolute; inset: -8px 0; }
+.chip svg { color: var(--md-primary); }
+.chip .ct { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chip .ct b { color: var(--md-on-surface); font-weight: 500; }
+/* ボタン（高さ 40px・角丸 full）。押せる範囲は 48px */
+.btn {
+  height: 40px; padding: 0 24px; border-radius: var(--shape-full); border: 0;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; margin: 4px 0; overflow: visible;
+}
+.btn::after { content: ""; position: absolute; inset: -4px 0; }
+.btn.tonal { background: var(--md-secondary-container); color: var(--md-on-secondary-container); }
+.btn.filled { background: var(--md-primary); color: var(--md-on-primary); }
+.btn.text { background: transparent; color: var(--md-primary); padding: 0 12px; }
+.section-title { color: var(--md-on-surface-variant); margin-top: 4px; }
 
-.note { font-size: 10px; color: var(--muted); line-height: 1.6; text-align: center; }
+.note { color: var(--md-on-surface-variant); text-align: center; margin: 8px 0 0; text-wrap: balance; word-break: keep-all; overflow-wrap: anywhere; }
 
-/* 結果画面 */
+/* 実況（スナックバーの形: inverse-surface・角丸 4px・影 level3） */
+.call {
+  position: fixed; left: 50%; top: calc(72px + env(safe-area-inset-top)); z-index: 20;
+  transform: translate(-50%, -8px); opacity: 0; pointer-events: none;
+  width: max-content; max-width: min(528px, calc(100vw - 32px)); min-height: 48px;
+  display: flex; align-items: center; gap: 12px; padding: 14px 16px;
+  background: var(--md-inverse-surface); color: var(--md-inverse-on-surface);
+  border-radius: var(--shape-xs); box-shadow: var(--elev-3);
+  transition: transform 250ms var(--ease-decel), opacity 150ms var(--ease);
+}
+.call.show { transform: translate(-50%, 0); opacity: 1; }
+.call .bar { width: 4px; align-self: stretch; border-radius: 2px; background: var(--md-inverse-primary); flex: none; }
+.call.b .bar { background: var(--bench); } .call.d .bar { background: var(--sell); }
+
+/* ダイアログ（surface-container-high・角丸 28px・余白 24px） */
 .over {
-  position: fixed; inset: 0; z-index: 30; background: rgba(5, 7, 15, .82);
+  position: fixed; inset: 0; z-index: 30; background: var(--md-scrim);
   display: none; align-items: center; justify-content: center;
-  padding: calc(16px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom));
-  backdrop-filter: blur(4px);
+  padding: calc(24px + env(safe-area-inset-top)) 24px calc(24px + env(safe-area-inset-bottom));
 }
 .over.show { display: flex; }
-.res {
-  width: 100%; max-width: 440px; max-height: 100%; overflow: auto;
-  background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 18px 16px;
-  animation: pop .35s cubic-bezier(.2, .9, .3, 1.3);
+.dialog {
+  width: 100%; max-width: 480px; max-height: 100%; overflow: auto;
+  background: var(--md-surface-container-high); border-radius: var(--shape-xl); padding: 24px;
+  box-shadow: var(--elev-3); animation: dialog-in 300ms var(--ease-decel);
 }
-@keyframes pop { from { transform: scale(.85); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-.winner { text-align: center; }
-.winner .k { font-size: 12px; color: var(--muted); font-weight: 700; letter-spacing: .2em; }
-.winner .n { font-size: clamp(30px, 10vw, 40px); font-weight: 900; margin-top: 2px; text-shadow: 0 0 22px currentColor; }
-.winner .d { font-size: 13px; color: var(--muted); margin-top: 4px; }
-table { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 13px; }
-th, td { padding: 8px 4px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
-th:first-child, td:first-child { text-align: left; color: var(--muted); font-weight: 600; font-size: 12px; white-space: normal; }
-thead th { font-size: 12px; font-weight: 800; }
+@keyframes dialog-in { from { transform: translateY(-16px) scale(.96); opacity: 0; } to { transform: none; opacity: 1; } }
+.dialog .k { color: var(--md-on-surface-variant); text-align: center; }
+.dialog .n { text-align: center; margin-top: 8px; display: flex; justify-content: center; align-items: center; gap: 8px; }
+.dialog .d { color: var(--md-on-surface-variant); text-align: center; margin-top: 4px; }
+table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+th, td { padding: 12px 4px; border-bottom: 1px solid var(--md-outline-variant); text-align: right; white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; color: var(--md-on-surface-variant); white-space: normal; }
 thead th.s { color: var(--strat); } thead th.b { color: var(--bench); }
-td.win { color: var(--gold); font-weight: 800; }
-.res-btns { display: flex; gap: 8px; margin-top: 16px; }
-.res-btns button { flex: 1; min-height: 46px; border-radius: 12px; font-weight: 800; border: 1px solid var(--line); background: var(--panel-2); }
-.res-btns button.main { background: var(--gold); color: #061024; border-color: var(--gold); }
-/* フォワードテスト: 今日の対戦結果 */
-.today { background: linear-gradient(160deg, #1f2752, #151a2e 60%); border: 1px solid #3a447a; border-radius: 18px; padding: 14px 12px 12px; margin-top: 10px; box-shadow: 0 10px 30px rgba(20, 30, 90, .35); }
-.today-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-.today-head .t { font-size: 14px; font-weight: 900; color: var(--gold); letter-spacing: .04em; }
-.today-head .d { font-size: 11px; color: var(--muted); font-weight: 600; white-space: nowrap; }
-.today-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
-.tcol { background: rgba(11, 14, 26, .45); border-radius: 12px; padding: 10px; min-width: 0; border: 1px solid var(--line); }
-.tcol .nm { font-size: 13px; font-weight: 800; }
-.tcol.s .nm { color: var(--strat); } .tcol.b .nm { color: var(--bench); }
-.tcol .big { font-size: clamp(22px, 7.2vw, 30px); font-weight: 900; margin-top: 4px; white-space: nowrap; }
-.tcol .big .yen { font-size: .5em; color: var(--muted); margin-left: 2px; }
-.tcol .chg { font-size: 15px; font-weight: 800; margin-top: 2px; white-space: nowrap; }
-.tcol .chg small { font-size: 10px; color: var(--muted); font-weight: 600; margin-right: 4px; }
-.chg.pos { color: var(--buy); } .chg.neg { color: var(--sell); } .chg.zero { color: var(--muted); }
-.tcol .tr { font-size: 11px; margin-top: 6px; line-height: 1.5; color: var(--muted); overflow-wrap: anywhere; }
-.tcol .tr .buy { color: var(--buy); } .tcol .tr .sell { color: var(--sell); }
-.today-lead { text-align: center; margin-top: 10px; font-weight: 900; }
-.today-lead .w { font-size: 15px; } .today-lead .a { font-size: clamp(26px, 8.5vw, 34px); margin-left: 6px; }
-.today-lead.s { color: var(--strat); } .today-lead.b { color: var(--bench); } .today-lead.e { color: var(--muted); }
-.today-lead .y { display: block; font-size: 11px; color: var(--muted); font-weight: 600; margin-top: 2px; }
-.totals { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 10px; }
-.totals .cap { font-size: 11px; color: var(--muted); font-weight: 700; }
-.tbar { display: flex; height: 10px; border-radius: 99px; overflow: hidden; margin-top: 6px; background: var(--panel-2); }
-.tbar span { display: block; height: 100%; }
-.tnums { display: flex; justify-content: space-between; gap: 6px; margin-top: 6px; font-size: 12px; font-weight: 800; }
-.tnums .s { color: var(--strat); } .tnums .b { color: var(--bench); } .tnums .e { color: var(--muted); }
-.updated { font-size: 10px; color: var(--muted); text-align: right; margin-top: 8px; }
-.empty-card { margin-top: 24px; background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 36px 16px; text-align: center; }
-.empty-card .big { font-size: clamp(20px, 6.4vw, 26px); font-weight: 900; line-height: 1.5; }
-.empty-card .big b { color: var(--gold); }
-.empty-card .sub { font-size: 12px; color: var(--muted); margin-top: 12px; line-height: 1.7; }
+td.win { font-weight: 700; }
+td.win::after { content: " ★"; color: var(--md-primary); font-size: 12px; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px; flex-wrap: wrap; }
 
-.empty { text-align: center; padding: 40px 10px; color: var(--muted); font-size: 14px; line-height: 1.8; }
+/* フォワードテスト: 今日の対戦結果（elevated カード） */
+.today { padding: 16px; border-radius: var(--shape-lg); }
+.today-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.today-head .t { color: var(--md-primary); }
+.today-head .d { color: var(--md-on-surface-variant); white-space: nowrap; }
+.today-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
+.tcol { border-radius: var(--shape-md); padding: 12px; min-width: 0; }
+.tcol.s { background: var(--strat-c); color: var(--on-strat-c); }
+.tcol.b { background: var(--bench-c); color: var(--on-bench-c); }
+.tcol .big { margin-top: 4px; white-space: nowrap; font-weight: 500; }
+.tcol .big .yen { font-size: 14px; margin-left: 2px; font-weight: 400; }
+.tcol .chg { margin-top: 4px; white-space: nowrap; }
+.tcol .chg small { opacity: .8; margin-right: 4px; font-size: 12px; }
+.tcol .chg-pos::before { content: "▲ "; font-size: 10px; } .tcol .chg-neg::before { content: "▼ "; font-size: 10px; }
+.tcol .tr { margin-top: 8px; overflow-wrap: anywhere; opacity: .9; }
+.today-lead { text-align: center; margin-top: 16px; }
+.today-lead .w { margin-right: 8px; }
+.today-lead.s { color: var(--strat); } .today-lead.b { color: var(--bench); } .today-lead.e { color: var(--md-on-surface-variant); }
+.today-lead .y { display: block; color: var(--md-on-surface-variant); margin-top: 2px; }
+.totals { margin-top: 16px; border-top: 1px solid var(--md-outline-variant); padding-top: 16px; }
+.totals .cap { color: var(--md-on-surface-variant); }
+.tbar { display: flex; gap: 2px; height: 8px; margin-top: 8px; }
+.tbar span { display: block; height: 100%; border-radius: var(--shape-full); min-width: 0; }
+.tbar span:empty[style*="width:0"] { display: none; }
+.tnums { display: flex; justify-content: space-between; gap: 8px; margin-top: 8px; }
+.tnums span { display: inline-flex; align-items: center; gap: 6px; }
+.tnums i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.updated { color: var(--md-on-surface-variant); text-align: right; margin-top: 12px; }
+
+/* 記録がまだないとき */
+.empty-card { margin-top: 24px; text-align: center; padding: 32px 24px; border-radius: var(--shape-xl); }
+.empty-card .icon { width: 48px; height: 48px; color: var(--md-primary); margin: 0 auto 16px; display: block; }
+.empty-card .big b { display: block; color: var(--md-primary); font-weight: 500; }
+.empty-card .sub { color: var(--md-on-surface-variant); margin-top: 16px; }
+.empty { text-align: center; padding: 40px 16px; color: var(--md-on-surface-variant); }
 
 @media (prefers-reduced-motion: reduce) {
-  .chart-wrap.shake { animation: none; }
-  .call { transition: opacity .2s; }
+  .chart.shake { animation: none; }
+  .call, .dialog { transition: opacity 150ms linear; animation: none; }
 }
 </style>
 </head>
 <body>
-<div class="call" id="call" role="status" aria-live="polite"></div>
+<div class="call body-m" id="call" role="status" aria-live="polite"><span class="bar"></span><span id="callText"></span></div>
+
+<header class="topbar" id="topbar">
+  <div class="bar"><h1 class="title-l"><span class="s">戦略くん</span><span class="x">VS</span><span class="b">放置くん</span></h1></div>
+</header>
 
 <div class="app">
-  <div class="modes" id="modes">
-    <button data-mode="replay">過去のリプレイ</button>
-    <button data-mode="forward">フォワードテスト</button>
+  <div class="seg" id="modes" role="group" aria-label="表示するもの">
+    <button class="st label-l" data-mode="replay" aria-pressed="false">
+      <svg class="ic-s chk" viewBox="0 0 24 24"><path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+      <span class="lbl">過去のリプレイ</span></button>
+    <button class="st label-l" data-mode="forward" aria-pressed="false">
+      <svg class="ic-s chk" viewBox="0 0 24 24"><path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+      <span class="lbl">フォワードテスト</span><span class="badge label-s" id="fwBadge"></span></button>
   </div>
 
-  <div id="main">
-    <div class="head">
-      <div class="vs"><span class="s">戦略くん</span><span class="x">VS</span><span class="b">放置くん</span></div>
-      <div class="pick" id="pickWrap"><select id="pick" aria-label="戦略くんの中身（対戦相手）"></select></div>
-      <div class="date num" id="date">----</div>
+  <div id="main" style="display:flex;flex-direction:column;gap:12px">
+    <div class="field" id="pickWrap">
+      <select id="pick"></select>
+      <label for="pick" class="body-s">対戦相手（戦略くんの中身）</label>
+      <svg class="ic arrow" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z"/></svg>
     </div>
 
-    <section class="today" id="today" hidden aria-label="今日の対戦結果"></section>
+    <div class="datebox"><div class="display-s num" id="date">----</div><div class="sub body-s num" id="dateSub"></div></div>
 
-    <div class="board" style="margin-top:10px">
-      <div class="card s" id="cardS">
-        <div class="who">戦略くん <span class="crown">★ リード</span></div>
-        <div class="label" id="labelS"></div>
-        <div class="money num" id="moneyS">0<span class="yen">円</span></div>
-        <div class="pct num" id="pctS"></div>
+    <section class="today card elevated" id="today" hidden aria-label="今日の対戦結果"></section>
+
+    <div class="board">
+      <div class="card filled player s" id="cardS">
+        <div class="who title-s">戦略くん <span class="chip-lead label-m"><svg class="ic-s" viewBox="0 0 24 24"><path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>リード</span></div>
+        <div class="label body-s" id="labelS"></div>
+        <div class="money headline-s num" id="moneyS">0<span class="yen">円</span></div>
+        <div class="pct body-s num" id="pctS"></div>
       </div>
-      <div class="card b" id="cardB">
-        <div class="who">放置くん <span class="crown">★ リード</span></div>
-        <div class="label" id="labelB"></div>
-        <div class="money num" id="moneyB">0<span class="yen">円</span></div>
-        <div class="pct num" id="pctB"></div>
+      <div class="card filled player b" id="cardB">
+        <div class="who title-s">放置くん <span class="chip-lead label-m"><svg class="ic-s" viewBox="0 0 24 24"><path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>リード</span></div>
+        <div class="label body-s" id="labelB"></div>
+        <div class="money headline-s num" id="moneyB">0<span class="yen">円</span></div>
+        <div class="pct body-s num" id="pctB"></div>
       </div>
     </div>
 
-    <div class="lead-box" style="margin-top:8px">
-      <div class="lead-text e" id="leadText"><span class="who2">互角</span><span class="amt num">0円</span></div>
+    <div class="card outlined">
+      <div class="lead-text e" id="leadText"><span class="title-m">互角</span><span class="headline-s num">0円</span></div>
       <div class="tug"><div class="mid"></div><div class="fill" id="tug"></div></div>
-      <div class="tug-cap"><span>← 戦略くん</span><span>放置くん →</span></div>
+      <div class="tug-cap label-m"><span>← 戦略くん</span><span>放置くん →</span></div>
     </div>
 
-    <div class="chart-wrap" id="chartWrap" style="margin-top:8px">
+    <div class="card outlined chart" id="chartWrap">
       <canvas id="chart" aria-label="資産の推移グラフ"></canvas>
-      <div class="legend">
+      <div class="legend label-m">
         <span><i style="background:var(--strat)"></i>戦略くん</span>
         <span><i style="background:var(--bench)"></i>放置くん</span>
         <span><i class="dash"></i>投入総額</span>
@@ -276,44 +413,52 @@ td.win { color: var(--gold); font-weight: 800; }
       </div>
     </div>
 
-    <div class="log" id="log" style="margin-top:8px"></div>
-
-    <div class="controls" style="margin-top:8px">
-      <input type="range" id="seek" min="0" max="0" value="0" aria-label="日付を選ぶ">
-      <div class="range-cap num"><span id="first"></span><span id="last"></span></div>
-      <div class="row">
-        <button class="play" id="play" aria-label="再生">▶</button>
-        <div class="speeds" id="speeds">
-          <button data-speed="1">1倍</button>
-          <button data-speed="5">5倍</button>
-          <button data-speed="20">20倍</button>
-        </div>
-      </div>
-      <div class="scenes-title">名場面ジャンプ（少し前の日から再生）</div>
-      <div class="scenes" id="scenes"></div>
-      <button class="result-btn" id="showResult">結果を見る</button>
+    <div class="card outlined list">
+      <div class="h label-m">最近の売買</div>
+      <div id="log"></div>
     </div>
 
-    <p class="note">架空売買のシミュレーションです。実際の注文は出していません。<br>
+    <div class="card filled controls">
+      <div>
+        <input type="range" id="seek" min="0" max="0" value="0" aria-label="日付を選ぶ">
+        <div class="range-cap body-s num"><span id="first"></span><span id="last"></span></div>
+      </div>
+      <div class="playrow">
+        <button class="fab st" id="play" aria-label="再生">
+          <svg class="ic" viewBox="0 0 24 24" id="playIcon"><path d="M8 5v14l11-7z"/></svg>
+        </button>
+        <div class="seg" id="speeds" role="group" aria-label="再生の速さ">
+          <button class="st label-l" data-speed="1" aria-pressed="false"><svg class="ic-s chk" viewBox="0 0 24 24"><path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg><span class="lbl">1倍</span></button>
+          <button class="st label-l" data-speed="5" aria-pressed="false"><svg class="ic-s chk" viewBox="0 0 24 24"><path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg><span class="lbl">5倍</span></button>
+          <button class="st label-l" data-speed="20" aria-pressed="false"><svg class="ic-s chk" viewBox="0 0 24 24"><path d="M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg><span class="lbl">20倍</span></button>
+        </div>
+      </div>
+      <div class="section-title title-s">名場面ジャンプ（少し前の日から再生）</div>
+      <div class="scene-list" id="scenes"></div>
+      <button class="btn tonal st label-l" id="showResult">
+        <svg class="ic-s" viewBox="0 0 24 24"><path d="M19 5h-2V3H7v2H5c-1.1 0-2 .9-2 2v1c0 2.55 1.92 4.63 4.39 4.94A5.01 5.01 0 0 0 11 15.9V19H7v2h10v-2h-4v-3.1a5.01 5.01 0 0 0 3.61-2.96C19.08 12.63 21 10.55 21 8V7c0-1.1-.9-2-2-2zM5 8V7h2v3.82C5.84 10.4 5 9.3 5 8zm14 0c0 1.3-.84 2.4-2 2.82V7h2v1z"/></svg>
+        結果を見る</button>
+    </div>
+
+    <p class="note body-s">架空売買のシミュレーションです。実際の注文は出していません。<br>
       資産は積立の入金を含む額。最大の落ち込みは入金の影響を除いて計算しています。</p>
   </div>
   <div id="emptyMode" hidden></div>
 </div>
 
 <div class="over" id="over">
-  <div class="res" role="dialog" aria-modal="true" aria-labelledby="winName">
-    <div class="winner">
-      <div class="k">勝者</div>
-      <div class="n" id="winName">-</div>
-      <div class="d num" id="winDiff"></div>
-    </div>
-    <table>
-      <thead><tr><th></th><th class="s">戦略くん</th><th class="b">放置くん</th></tr></thead>
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="winName">
+    <div class="k label-l" id="winKind">勝者</div>
+    <div class="n headline-m" id="winName">-</div>
+    <div class="d body-m num" id="winDiff"></div>
+    <table class="body-m">
+      <thead><tr><th></th><th class="s title-s">戦略くん</th><th class="b title-s">放置くん</th></tr></thead>
       <tbody id="resBody"></tbody>
     </table>
-    <div class="res-btns">
-      <button class="main" id="again">もう一度見る</button>
-      <button id="change">相手を変える</button>
+    <div class="dialog-actions">
+      <button class="btn text st label-l" id="change">相手を変える</button>
+      <button class="btn text st label-l" id="closeRes">閉じる</button>
+      <button class="btn filled st label-l" id="again">もう一度見る</button>
     </div>
   </div>
 </div>
@@ -326,14 +471,28 @@ const GAME = /*__GAME_DATA__*/null;
   const $ = (id) => document.getElementById(id);
   const yen = (v) => Math.round(v).toLocaleString("ja-JP");
   const signedYen = (v) => (v >= 0 ? "+" : "−") + yen(Math.abs(v)) + "円";
-  const pctText = (v, d = 1) => (v >= 0 ? "+" : "−") + Math.abs(v * 100).toFixed(d) + "%";
+  const pctText = (v, d = 1) => {
+    const t = Math.abs(v * 100).toFixed(d);
+    return (+t === 0 ? "" : v > 0 ? "+" : "−") + t + "%";
+  };
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   // 1倍 = 1秒に10営業日。フォワードテストで日数が少ないうち（60日以下）は1秒に1日
   const daysPerSec = () => (ds && ds.kind === "forward" && ds.dates.length <= 60 ? 1 : 10);
+  const ICON = { play: '<path d="M8 5v14l11-7z"/>', pause: '<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>' };
 
-  const css = getComputedStyle(document.documentElement);
-  const C = Object.fromEntries(["strat", "bench", "buy", "sell", "gold", "deposit", "muted", "line", "ink"]
-    .map((k) => [k, css.getPropertyValue("--" + k).trim()]));
+  // 色は CSS の役割（トークン）から読む。明るい表示・暗い表示が切り替わったら読み直す
+  const C = {};
+  function readColors() {
+    const css = getComputedStyle(document.documentElement);
+    const get = (k) => css.getPropertyValue(k).trim();
+    Object.assign(C, {
+      strat: get("--strat"), bench: get("--bench"), buy: get("--buy"), sell: get("--sell"),
+      deposit: get("--deposit"), muted: get("--md-on-surface-variant"), line: get("--md-outline-variant"),
+      surface: get("--md-surface"), primary: get("--md-primary"),
+    });
+  }
+  readColors();
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { readColors(); yRange = null; });
 
   // ---------------- 状態 ----------------
   let mode = "replay", ds = null, P = null, B = null;
@@ -344,42 +503,48 @@ const GAME = /*__GAME_DATA__*/null;
   let ev = null;      // 実況のための記憶（リーダー・リードの節目など）
   let finished = false;
 
+  // 上のアプリバー: スクロールしたら色を変えて影をつける
+  const topbar = $("topbar");
+  window.addEventListener("scroll", () => topbar.classList.toggle("scrolled", window.scrollY > 0), { passive: true });
+
   // ---------------- モード ----------------
   function setMode(m) {
     const data = GAME && GAME.modes && GAME.modes[m];
-    document.querySelectorAll("#modes button").forEach((b) => {
-      b.classList.toggle("on", b.dataset.mode === m);
-      const has = GAME && GAME.modes && GAME.modes[b.dataset.mode];
-      if (b.dataset.mode === "forward") b.innerHTML = "フォワードテスト" +
-        (!has ? '<span class="soon">準備中</span>' : has.empty ? '<span class="soon">開始前</span>' : "");
-    });
+    const fw = GAME && GAME.modes && GAME.modes.forward;
+    $("fwBadge").textContent = !fw ? "準備中" : fw.empty ? "開始前" : "";
     if (data && data.empty) {     // フォワードテストの記録がまだ0日分
-      pause(); mode = m;
+      pause(); mode = m; markMode(m);
       const [head, rest] = String(data.message).split("：");
       $("main").hidden = true; $("emptyMode").hidden = false;
-      $("emptyMode").innerHTML = `<div class="empty-card"><div class="big">${escapeHtml(head)}${rest ? "：<br><b>" + escapeHtml(rest) + "</b>" : ""}</div>
-        <div class="sub">開始日 ${escapeHtml(data.start)}。架空の資金で「戦略くん」と「放置くん」が毎日対戦します。<br>
+      $("emptyMode").innerHTML = `<div class="card elevated empty-card">
+        <svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M15 1H9v2h6V1zm-4 13h2V8h-2v6zm8.03-6.61 1.42-1.42c-.43-.51-.9-.99-1.41-1.41l-1.42 1.42A8.962 8.962 0 0 0 12 4c-4.97 0-9 4.03-9 9s4.02 9 9 9 9-4.03 9-9c0-2.12-.74-4.07-1.97-5.61zM12 20c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/></svg>
+        <div class="big headline-s">${escapeHtml(head)}${rest ? `<b>${escapeHtml(rest)}</b>` : ""}</div>
+        <div class="sub body-m">開始日 ${escapeHtml(data.start)}。架空の資金で「戦略くん」と「放置くん」が毎日対戦します。<br>
         平日の夕方に自動で更新されます。</div></div>`;
       return;
     }
     if (!data) {
-      if (m !== "replay" && ds) { say(m === "forward" ? "フォワードテストのデータはまだありません" : "データがありません", ""); setMode(mode); return; }
+      if (m !== "replay" && ds) { say(m === "forward" ? "フォワードテストのデータはまだありません" : "データがありません", ""); return; }
+      markMode(m);
       $("main").hidden = true; $("emptyMode").hidden = false;
-      $("emptyMode").textContent = "表示できるデータがありません。run.py を実行すると、ここに結果が入ります。";
+      $("emptyMode").innerHTML = '<div class="empty body-m">表示できるデータがありません。run.py を実行すると、ここに結果が入ります。</div>';
       return;
     }
-    mode = m; ds = data; B = ds.benchmark;
+    mode = m; ds = data; B = ds.benchmark; markMode(m);
     $("main").hidden = false; $("emptyMode").hidden = true;
     const pick = $("pick");
     pick.innerHTML = ds.players.map((p, k) => `<option value="${k}">${escapeHtml(p.label)}</option>`).join("");
-    $("pickWrap").style.display = ds.players.length > 1 ? "" : "none";
-    $("change").style.display = ds.players.length > 1 ? "" : "none";
+    $("pickWrap").hidden = ds.players.length <= 1;
+    $("change").hidden = ds.players.length <= 1;
     $("seek").max = ds.dates.length - 1;
     $("first").textContent = ds.dates[0];
     $("last").textContent = ds.dates[ds.dates.length - 1];
     $("labelB").textContent = B.label;
     $("today").hidden = ds.kind !== "forward";
     setPlayer(0);
+  }
+  function markMode(m) {
+    document.querySelectorAll("#modes button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === m)));
   }
 
   function setPlayer(k) {
@@ -402,34 +567,35 @@ const GAME = /*__GAME_DATA__*/null;
     const tradesOf = (pl) => {
       const ms = pl.markers.filter((m) => m.i === L);
       if (!ms.length) return "売買なし";
-      return ms.map((m) => `<span class="${m.side}">${escapeHtml(m.symbol)} ${m.side === "buy" ? (m.kind === "topup" ? "積立で買い増し" : "買い") : "全部売り"} ${m.shares.toLocaleString("ja-JP")}口</span>`).join("<br>");
+      return ms.map((m) => `${escapeHtml(m.symbol)} ${m.side === "buy" ? (m.kind === "topup" ? "積立で買い増し" : "買い") : "全部売り"} ${m.shares.toLocaleString("ja-JP")}口`).join("<br>");
     };
     const col = (pl, cls, name) => {
       const c = change(pl);
-      return `<div class="tcol ${cls}"><div class="nm">${name}</div>
-        <div class="big num">${yen(pl.equity[L])}<span class="yen">円</span></div>
-        <div class="chg num ${c > 0 ? "pos" : c < 0 ? "neg" : "zero"}"><small>今日</small>${signedYen(c)}</div>
-        <div class="tr">${tradesOf(pl)}</div></div>`;
+      return `<div class="tcol ${cls}"><div class="title-s">${name}</div>
+        <div class="big headline-s num">${yen(pl.equity[L])}<span class="yen">円</span></div>
+        <div class="chg title-s num ${c > 0 ? "chg-pos" : c < 0 ? "chg-neg" : ""}"><small>今日</small>${signedYen(c)}</div>
+        <div class="tr body-s">${tradesOf(pl)}</div></div>`;
     };
     const lead = P.equity[L] - B.equity[L];
     const prev = L > 0 ? P.equity[L - 1] - B.equity[L - 1] : 0;
     const leadHtml = Math.abs(lead) < 1
-      ? `<div class="today-lead e"><span class="w">互角</span><span class="a num">0円</span></div>`
-      : `<div class="today-lead ${lead > 0 ? "s" : "b"}"><span class="w">${lead > 0 ? "戦略リード" : "放置リード"}</span><span class="a num">+${yen(Math.abs(lead))}円</span>
-         <span class="y num">${L > 0 ? `前の日より戦略くんが ${signedYen(lead - prev)}` : "初日"}</span></div>`;
+      ? `<div class="today-lead e"><span class="w title-m">互角</span><span class="headline-m num">0円</span></div>`
+      : `<div class="today-lead ${lead > 0 ? "s" : "b"}"><span class="w title-m">${lead > 0 ? "戦略リード" : "放置リード"}</span><span class="headline-m num">+${yen(Math.abs(lead))}円</span>
+         <span class="y body-s num">${L > 0 ? `前の日より戦略くんが ${signedYen(lead - prev)}` : "初日"}</span></div>`;
     let win = 0, lose = 0, tie = 0;
     for (let j = 0; j <= L; j++) { const l = P.equity[j] - B.equity[j]; if (Math.abs(l) < 1) tie++; else if (l > 0) win++; else lose++; }
     const n = L + 1, w = (x) => (x / n * 100).toFixed(1) + "%";
+    const seg = (x, color) => (x ? `<span style="width:${w(x)};background:${color}"></span>` : "");
     $("today").innerHTML = `
-      <div class="today-head"><span class="t">今日の対戦結果</span><span class="d num">${md(ds.dates[L])}・${n}営業日目</span></div>
+      <div class="today-head"><span class="t title-m">今日の対戦結果</span><span class="d label-m num">${md(ds.dates[L])}・${n}営業日目</span></div>
       <div class="today-grid">${col(P, "s", "戦略くん")}${col(B, "b", "放置くん")}</div>
       ${leadHtml}
       <div class="totals">
-        <div class="cap">開始（${md(ds.dates[0])}）からの通算 ${n}営業日</div>
-        <div class="tbar"><span style="width:${w(win)};background:var(--strat)"></span><span style="width:${w(tie)};background:var(--muted)"></span><span style="width:${w(lose)};background:var(--bench)"></span></div>
-        <div class="tnums num"><span class="s">戦略リード ${win}日</span><span class="e">同点 ${tie}日</span><span class="b">戦略ビハインド ${lose}日</span></div>
+        <div class="cap label-m">開始（${md(ds.dates[0])}）からの通算 ${n}営業日</div>
+        <div class="tbar">${seg(win, "var(--strat)")}${seg(tie, "var(--md-outline-variant)")}${seg(lose, "var(--bench)")}</div>
+        <div class="tnums label-m num"><span><i style="background:var(--strat)"></i>戦略リード ${win}日</span><span><i style="background:var(--md-outline-variant)"></i>同点 ${tie}日</span><span><i style="background:var(--bench)"></i>ビハインド ${lose}日</span></div>
       </div>
-      <div class="updated num">更新 ${escapeHtml(String(ds.updated_at).replace("T", " ").slice(0, 16))}</div>`;
+      <div class="updated label-s num">更新 ${escapeHtml(String(ds.updated_at).replace("T", " ").slice(0, 16))}</div>`;
   }
 
   function escapeHtml(s) {
@@ -437,12 +603,16 @@ const GAME = /*__GAME_DATA__*/null;
   }
 
   // ---------------- 再生 ----------------
+  function setPlayIcon(name) {
+    $("playIcon").innerHTML = ICON[name];
+    $("play").setAttribute("aria-label", name === "play" ? "再生" : "一時停止");
+  }
   function play() {
     if (day >= ds.dates.length - 1) seek(0);
-    playing = true; finished = false; $("play").textContent = "❚❚"; $("play").setAttribute("aria-label", "一時停止");
+    playing = true; finished = false; setPlayIcon("pause");
     lastT = performance.now();
   }
-  function pause() { playing = false; $("play").textContent = "▶"; $("play").setAttribute("aria-label", "再生"); }
+  function pause() { playing = false; setPlayIcon("play"); }
 
   function seek(i) {
     i = Math.max(0, Math.min(ds.dates.length - 1, Math.round(i)));
@@ -455,7 +625,7 @@ const GAME = /*__GAME_DATA__*/null;
 
   function setSpeed(v) {
     speed = v;
-    document.querySelectorAll("#speeds button").forEach((b) => b.classList.toggle("on", +b.dataset.speed === v));
+    document.querySelectorAll("#speeds button").forEach((b) => b.setAttribute("aria-pressed", String(+b.dataset.speed === v)));
   }
 
   function frame(t) {
@@ -465,9 +635,9 @@ const GAME = /*__GAME_DATA__*/null;
       pos += dt * daysPerSec() * speed;
       const target = Math.min(ds.dates.length - 1, Math.floor(pos));
       while (day < target) { day++; onNewDay(day); }
-      if (day >= ds.dates.length - 1) { pos = day; pause(); if (!finished) { finished = true; say("決着！", "g"); setTimeout(showResult, 1300); } }
+      if (day >= ds.dates.length - 1) { pos = day; pause(); if (!finished) { finished = true; say("決着！", ""); setTimeout(showResult, 1300); } }
     }
-    if (ds) {
+    if (ds && !$("main").hidden) {
       const k = 1 - Math.exp(-dt * 12);    // 数字がなめらかに目標へ近づく
       disp.s += (P.equity[day] - disp.s) * k;
       disp.b += (B.equity[day] - disp.b) * k;
@@ -480,8 +650,11 @@ const GAME = /*__GAME_DATA__*/null;
   // ---------------- 画面の更新 ----------------
   function updateView(full) {
     const i = day, now = performance.now();
-    $("date").innerHTML = `${ds.dates[i]}<small>${i + 1} / ${ds.dates.length} 営業日</small>`;
-    if (full || +$("seek").value !== i) $("seek").value = i;
+    $("date").textContent = ds.dates[i];
+    $("dateSub").textContent = `${i + 1} / ${ds.dates.length} 営業日`;
+    const sk = $("seek");
+    if (full || +sk.value !== i) sk.value = i;
+    sk.style.setProperty("--p", (ds.dates.length > 1 ? i / (ds.dates.length - 1) * 100 : 100) + "%");
     const dep = ds.deposited[i];
     setMoney("S", disp.s, P.equity[i], dep, now, "s");
     setMoney("B", disp.b, B.equity[i], dep, now, "b");
@@ -490,8 +663,8 @@ const GAME = /*__GAME_DATA__*/null;
     const lt = $("leadText");
     const tie = Math.abs(lead) < 1;
     lt.className = "lead-text " + (tie ? "e" : lead > 0 ? "s" : "b");
-    lt.innerHTML = tie ? '<span class="who2">互角</span><span class="amt num">0円</span>'
-      : `<span class="who2">${lead > 0 ? "戦略リード" : "放置リード"}</span><span class="amt num">+${yen(Math.abs(lead))}円</span>`;
+    lt.innerHTML = tie ? '<span class="title-m">互角</span><span class="headline-s num">0円</span>'
+      : `<span class="title-m">${lead > 0 ? "戦略リード" : "放置リード"}</span><span class="headline-s num">+${yen(Math.abs(lead))}円</span>`;
     $("cardS").classList.toggle("lead", lead > 0.5);
     $("cardB").classList.toggle("lead", lead < -0.5);
     const share = Math.min(1, Math.abs(lead) / Math.max(1, B.equity[i]) / 0.3);   // 30%差で振り切れ
@@ -510,22 +683,22 @@ const GAME = /*__GAME_DATA__*/null;
     el.classList.toggle("down", now < flashUntil[k] && flashDir[k] < 0);
     const p = (actual - dep) / dep;
     const pe = $("pct" + key);
-    pe.className = "pct num " + (p >= 0 ? "pos" : "neg");
+    pe.className = "pct body-s num " + (p > 0 ? "pos" : p < 0 ? "neg" : "zero");
     pe.innerHTML = `損益 ${signedYen(actual - dep)}<span class="pp">投入総額の${pctText(p)}</span>`;
   }
   const flashDir = { s: 0, b: 0 };
 
   function renderLog() {
-    const rows = [];
     const all = [...P.markers.map((m) => ["戦略くん", m]), ...B.markers.map((m) => ["放置くん", m])]
       .filter(([, m]) => m.i <= day).sort((a, b) => a[1].i - b[1].i).slice(-3).reverse();
-    for (const [who, m] of all) rows.push(logLine(who, m));
-    if (!rows.length) rows.push('<div class="small">まだ売買はありません</div>');
-    $("log").innerHTML = rows.join("");
+    $("log").innerHTML = all.length ? all.map(([who, m]) => logLine(who, m)).join("")
+      : '<div class="empty-row body-m">まだ売買はありません</div>';
   }
   function logLine(who, m) {
     const word = m.side === "buy" ? (m.kind === "topup" ? "積立で買い増し" : "買い") : "全部売り";
-    return `<div class="${m.side}${m.kind === "topup" ? " small" : ""}">${ds.dates[m.i].slice(5)}　${who}　${m.symbol} ${word} ${m.shares.toLocaleString("ja-JP")}口</div>`;
+    const dot = m.kind === "topup" ? "topup" : m.side;
+    return `<div class="row-item"><span class="dot ${dot}"></span><span class="when label-m num">${ds.dates[m.i].slice(5).replace("-", "/")}</span>
+      <span class="txt body-m">${who}　${escapeHtml(m.symbol)} ${word} ${m.shares.toLocaleString("ja-JP")}口</span></div>`;
   }
 
   // ---------------- 1日進んだとき（効果と実況） ----------------
@@ -553,12 +726,10 @@ const GAME = /*__GAME_DATA__*/null;
 
   function onNewDay(i) {
     const now = performance.now();
-    // 数字の光り方
     for (const [k, pl] of [["s", P], ["b", B]]) {
       const d = pl.equity[i] - pl.equity[i - 1] - (ds.deposited[i] - ds.deposited[i - 1]);
       if (Math.abs(d) > pl.equity[i] * 0.004) { flashDir[k] = Math.sign(d); flashUntil[k] = now + 260; }
     }
-    // 売買の印と効果
     const ms = (mapS.get(i) || []).filter((m) => m.kind !== "topup");
     const mb = (mapB.get(i) || []).filter((m) => m.kind !== "topup");
     for (const m of ms) effects.push({ i, who: "s", side: m.side, t0: now });
@@ -614,8 +785,8 @@ const GAME = /*__GAME_DATA__*/null;
     if (now < callBusyUntil || !callQueue.length) return;
     const { text, kind } = callQueue.shift();
     const el = $("call");
-    el.textContent = text;
-    el.className = "call show " + (kind || "");
+    $("callText").textContent = text;
+    el.className = "call body-m show " + (kind || "");
     const hold = speed >= 20 ? 1500 : 2400;
     callBusyUntil = now + hold + 250;
     clearTimeout(callTimer);
@@ -635,10 +806,11 @@ const GAME = /*__GAME_DATA__*/null;
 
   function draw(t) {
     if (!W) resize();
+    if (!W) return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, W, H);
     const n = ds.dates.length, i = day;
-    const padL = 40, padR = 12, padT = 14, padB = 20;
+    const padL = 44, padR = 12, padT = 14, padB = 22;
     const pw = W - padL - padR, ph = H - padT - padB;
 
     // 縦軸の範囲は「ここまでの値」に合わせて、なめらかに広げる
@@ -655,23 +827,23 @@ const GAME = /*__GAME_DATA__*/null;
     const X = (j) => padL + (n <= 1 ? 0 : (j / (n - 1)) * pw);
     const Y = (v) => padT + (1 - (v - yRange.lo) / (yRange.hi - yRange.lo)) * ph;
 
-    // 目盛り
-    ctx.font = "10px system-ui, sans-serif";
+    // 目盛り（label-small 11px）
+    ctx.font = '500 11px Roboto, "Noto Sans JP", system-ui, sans-serif';
     ctx.fillStyle = C.muted; ctx.strokeStyle = C.line; ctx.lineWidth = 1;
     const step = niceStep((yRange.hi - yRange.lo) / 4);
     ctx.textAlign = "right"; ctx.textBaseline = "middle";
     for (let v = Math.ceil(yRange.lo / step) * step; v <= yRange.hi; v += step) {
       const y = Y(v);
-      ctx.globalAlpha = 0.6; ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W - padR, y); ctx.stroke(); ctx.globalAlpha = 1;
+      ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W - padR, y); ctx.stroke();
       const dec = step >= 10000 ? 0 : step >= 1000 ? 1 : 2;   // 目盛りの間隔が細かいときは小数まで
-      ctx.fillText((v / 10000).toFixed(dec) + "万", padL - 4, y);
+      ctx.fillText((v / 10000).toFixed(dec) + "万", padL - 6, y);
     }
     ctx.textAlign = "center"; ctx.textBaseline = "top";
     if (n <= 260) {     // 1年に満たないときは「月/日」で5つほど
       const every = Math.max(1, Math.ceil(n / 5));
       for (let j = 0; j < n; j += every) {
         const [, mo, da] = ds.dates[j].split("-");
-        ctx.fillText(`${+mo}/${+da}`, Math.max(padL + 12, X(j)), H - padB + 5);
+        ctx.fillText(`${+mo}/${+da}`, Math.max(padL + 12, X(j)), H - padB + 6);
       }
     } else {
       let lastYear = null, lastX = -99;
@@ -680,15 +852,15 @@ const GAME = /*__GAME_DATA__*/null;
         if (y !== lastYear) {
           lastYear = y;
           const x = X(j);
-          if (x - lastX > 26 && j > 0) { ctx.fillText("'" + y.slice(2), x, H - padB + 5); lastX = x; }
+          if (x - lastX > 26 && j > 0) { ctx.fillText("'" + y.slice(2), x, H - padB + 6); lastX = x; }
         }
       }
     }
 
     // 線（投入総額 → 放置くん → 戦略くん）
-    line(ds.deposited, i, X, Y, C.deposit, 1.2, [4, 3]);
-    line(B.equity, i, X, Y, C.bench, 2.2);
-    line(P.equity, i, X, Y, C.strat, 2.2);
+    line(ds.deposited, i, X, Y, C.deposit, 1.25, [4, 3]);
+    line(B.equity, i, X, Y, C.bench, 2.5);
+    line(P.equity, i, X, Y, C.strat, 2.5);
 
     // 売買の印（積立の買い増しは出さない）。印が多いときは小さく薄くして、線を隠さない
     for (const pl of [B, P]) {
@@ -701,32 +873,33 @@ const GAME = /*__GAME_DATA__*/null;
       }
       ctx.restore();
     }
-    // 出た瞬間の効果（光の輪）
+    // 出た瞬間の効果（広がる輪）
     const now = performance.now();
-    effects = effects.filter((e) => now - e.t0 < 700);
+    effects = effects.filter((e) => now - e.t0 < 600);
     for (const e of effects) {
-      const k = (now - e.t0) / 700;
+      const k = (now - e.t0) / 600;
+      const ease = 1 - Math.pow(1 - k, 3);
       const pl = e.who === "s" ? P : B;
       const x = X(e.i), y = Y(pl.equity[e.i]);
       ctx.save();
-      ctx.strokeStyle = e.side === "buy" ? C.buy : C.sell;
-      ctx.globalAlpha = 1 - k; ctx.lineWidth = 3;
-      ctx.shadowColor = ctx.strokeStyle; ctx.shadowBlur = 16;
-      ctx.beginPath(); ctx.arc(x, y, 6 + k * 22, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = e.side === "buy" ? C.buy : C.sell;
+      ctx.globalAlpha = 0.24 * (1 - k);
+      ctx.beginPath(); ctx.arc(x, y, 6 + ease * 20, 0, Math.PI * 2); ctx.fill();
       ctx.restore();
-      mark(x, y, e.side, 1 + (1 - k) * 0.8);
+      mark(x, y, e.side, 1 + (1 - k) * 0.6);
     }
-    // 先頭の光る点
+    // 先頭の点（周りに 12% の輪）
     for (const [pl, col] of [[B, C.bench], [P, C.strat]]) {
       const x = X(i), y = Y(pl.equity[i]);
-      ctx.save(); ctx.fillStyle = col; ctx.shadowColor = col; ctx.shadowBlur = 12 + 6 * Math.sin(t / 180);
-      ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+      ctx.save(); ctx.fillStyle = col;
+      ctx.globalAlpha = 0.16; ctx.beginPath(); ctx.arc(x, y, 10, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1; ctx.beginPath(); ctx.arc(x, y, 4.5, 0, Math.PI * 2); ctx.fill(); ctx.restore();
     }
   }
 
   function line(arr, upto, X, Y, color, width, dash) {
     ctx.save();
-    ctx.strokeStyle = color; ctx.lineWidth = width; ctx.lineJoin = "round";
+    ctx.strokeStyle = color; ctx.lineWidth = width; ctx.lineJoin = "round"; ctx.lineCap = "round";
     if (dash) ctx.setLineDash(dash);
     ctx.beginPath();
     // 横幅より点が多いときは、1ピクセルあたり1点に間引く
@@ -740,12 +913,12 @@ const GAME = /*__GAME_DATA__*/null;
     const s = 5 * scale;
     ctx.save();
     ctx.fillStyle = side === "buy" ? C.buy : C.sell;
-    ctx.strokeStyle = "#0b0e1a"; ctx.lineWidth = 1;
+    ctx.strokeStyle = C.surface; ctx.lineWidth = 1.5;
     ctx.beginPath();
     const off = 4 + 5 * Math.min(1, scale);
     if (side === "buy") { const yy = y + off; ctx.moveTo(x, yy - s); ctx.lineTo(x - s, yy + s * 0.8); ctx.lineTo(x + s, yy + s * 0.8); }
     else { const yy = y - off; ctx.moveTo(x, yy + s); ctx.lineTo(x - s, yy - s * 0.8); ctx.lineTo(x + s, yy - s * 0.8); }
-    ctx.closePath(); ctx.fill(); if (scale >= 1) ctx.stroke(); ctx.restore();
+    ctx.closePath(); if (scale >= 1) ctx.stroke(); ctx.fill(); ctx.restore();
   }
 
   function niceStep(raw) {
@@ -764,6 +937,7 @@ const GAME = /*__GAME_DATA__*/null;
   ];
   const knownName = (d) => (KNOWN.find(([a, b]) => d >= a && d <= b) || [])[2];
   const ym = (d) => d.slice(0, 7);
+  const JUMP = '<svg class="ic" viewBox="0 0 24 24"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg>';
 
   function buildScenes() {
     const d = ds.dates, n = d.length, tw = B.twr, out = [];
@@ -801,12 +975,11 @@ const GAME = /*__GAME_DATA__*/null;
     if (iB >= 0 && maxB > 10000) out.push({ i: iB, text: "放置くんの最大リード", sub: `${ym(d[iB])}・${yen(maxB)}円`, before: 40 });
 
     out.sort((a, b) => a.i - b.i);
-    // 近すぎる場面はまとめる（ひと月以内）
     const scenes = [];
     for (const s of out) { if (!scenes.some((x) => Math.abs(x.i - s.i) < 20 && x.text === s.text)) scenes.push(s); }
     $("scenes").innerHTML = scenes.length ? scenes.map((s, k) =>
-      `<button data-k="${k}"><b>${escapeHtml(s.text)}</b>（${escapeHtml(s.sub)}）</button>`).join("")
-      : '<span class="note">目立った場面はありません</span>';
+      `<button class="scene st" data-k="${k}">${JUMP}<span class="tx"><span class="body-l">${escapeHtml(s.text)}</span><span class="sb body-m num">${escapeHtml(s.sub)}</span></span></button>`).join("")
+      : '<span class="body-s" style="color:var(--md-on-surface-variant)">目立った場面はありません</span>';
     $("scenes").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
       const s = scenes[+b.dataset.k];
       seek(Math.max(0, s.i - (s.before || 15)));
@@ -815,19 +988,19 @@ const GAME = /*__GAME_DATA__*/null;
     }));
   }
 
-  // ---------------- 結果画面 ----------------
+  // ---------------- 結果（ダイアログ） ----------------
   function showResult() {
     const a = P.summary, b = B.summary;
     const diff = a.final_equity - b.final_equity;
     const wn = $("winName");
-    document.querySelector(".winner .k").textContent = ds.kind === "forward" ? "いまリードしているのは" : "勝者";
-    if (Math.abs(diff) < 1) { wn.textContent = "引き分け"; wn.style.color = C.gold; $("winDiff").textContent = ""; }
+    $("winKind").textContent = ds.kind === "forward" ? "いまリードしているのは" : "勝者";
+    if (Math.abs(diff) < 1) { wn.textContent = "引き分け"; wn.style.color = C.muted; $("winDiff").textContent = ""; }
     else {
       wn.textContent = diff > 0 ? "戦略くん" : "放置くん";
       wn.style.color = diff > 0 ? C.strat : C.bench;
       $("winDiff").textContent = `最終資産の差 ${yen(Math.abs(diff))}円`;
     }
-    // better: 大きいほど良い(+1) / 小さいほど良い(-1) / 勝ち負けなし(0)
+    // 4つ目: 大きいほど良い(+) / 小さいほど良い(-) / 勝ち負けなし(0)
     const rows = [
       ["最終資産", yen(a.final_equity) + "円", yen(b.final_equity) + "円", a.final_equity - b.final_equity],
       ["損益", signedYen(a.pnl), signedYen(b.pnl), a.pnl - b.pnl],
@@ -838,6 +1011,7 @@ const GAME = /*__GAME_DATA__*/null;
     $("resBody").innerHTML = rows.map(([k, x, y, c]) =>
       `<tr><td>${k}</td><td class="num${c > 0 ? " win" : ""}">${x}</td><td class="num${c < 0 ? " win" : ""}">${y}</td></tr>`).join("");
     $("over").classList.add("show");
+    $("again").focus({ preventScroll: true });
   }
   function hideResult() { $("over").classList.remove("show"); }
 
@@ -849,6 +1023,7 @@ const GAME = /*__GAME_DATA__*/null;
   $("modes").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) setMode(b.dataset.mode); });
   $("showResult").addEventListener("click", showResult);
   $("again").addEventListener("click", () => { hideResult(); seek(0); play(); });
+  $("closeRes").addEventListener("click", hideResult);
   $("change").addEventListener("click", () => { hideResult(); $("pick").focus(); $("pick").scrollIntoView({ block: "center", behavior: "smooth" }); });
   $("over").addEventListener("click", (e) => { if (e.target === $("over")) hideResult(); });
   document.addEventListener("keydown", (e) => {

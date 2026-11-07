@@ -39,3 +39,27 @@ strategy:
 paths:
   data_dir: data           # 取得した株価データのキャッシュ
   output_dir: output       # 結果のグラフ・表
+
+# 戦略の比べ方（python compare.py で使う。run.py は使わない）
+# 選ぶ期間の成績で一番良い戦略を決め、確かめる期間でも「最初に買って放置」と比べる。
+# 確かめる期間の end を null にすると「取得できる最新の取引日まで」
+comparison:
+  select_period:
+    start: "2018-01-01"
+    end: "2022-12-31"
+  check_period:
+    start: "2023-01-01"
+    end: null
+  candidates:
+    # 1. 移動平均の日数違い
+    - {name: sma_cross, params: {window: 25}}
+    - {name: sma_cross, params: {window: 75}}
+    - {name: sma_cross, params: {window: 200}}
+    # 2. ダマシ対策: 平均より band 上で買い、band 下で売り（0.02 = 2%）
+    - {name: sma_band, params: {window: 25, band: 0.02}}
+    - {name: sma_band, params: {window: 75, band: 0.02}}
+    - {name: sma_band, params: {window: 200, band: 0.02}}
+    # 3. 買い⇄売りを切り替えたら、最低 cooldown 営業日は次の切り替えをしない
+    - {name: sma_cooldown, params: {window: 25, cooldown: 20}}
+    - {name: sma_cooldown, params: {window: 75, cooldown: 20}}
+    - {name: sma_cooldown, params: {window: 200, cooldown: 20}}

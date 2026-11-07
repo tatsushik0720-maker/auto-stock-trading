@@ -248,3 +248,56 @@ def plot_comparison(strategy: SimResult, benchmark: SimResult, path: Path,
         fig.savefig(path, dpi=150, facecolor=SURFACE)
         plt.close(fig)
     return path
+
+
+# ============================================================
+# 期間を区切った成績（選ぶ期間・確かめる期間）
+# ============================================================
+
+@dataclass
+class PeriodMetrics:
+    start: pd.Timestamp          # 期間内の最初の取引日
+    end: pd.Timestamp            # 期間内の最後の取引日
+    twr_total: float
+    twr_annual: float
+    max_drawdown: float
+    n_trades: int                # 期間内の売買回数（積立分の買い増しも1回と数える）
+    n_sells: int                 # うち売り（＝ポジションを手放した回数）
+    slippage: float              # 期間内の値差の負担額
+    exposure: float              # 期間内に株を持っていた日の割合
+
+
+def period_metrics(result: SimResult, start, end=None) -> PeriodMetrics:
+    """通しで動かした結果から、start〜end の部分だけの成績を出す。
+
+    リターンは「期間の直前の取引日の資産」を起点にする（期間の初日の値動きも数える）。
+    期間の初めに持っていた株は、そのまま持ち越す（実際に続けて運用した場合と同じ）。
+    """
+    pf = result.portfolio
+    start = pd.Timestamp(start)
+    end = pd.Timestamp(end) if end is not None else pf.index[-1]
+    idx = twr_index(pf)
+    inside = (idx.index >= start) & (idx.index <= end)
+    if not inside.any():
+        raise ValueError(f"{start.date()}〜{end.date()} に取引日がありません")
+    before = idx[idx.index < start]
+    base = float(before.iloc[-1]) if len(before) else 1.0
+    base_day = before.index[-1] if len(before) else idx.index[inside][0]
+    part = idx[inside] / base
+    days = (part.index[-1] - base_day).days
+    total = float(part.iloc[-1] - 1)
+    annual = float((1 + total) ** (365.25 / days) - 1) if days > 0 else 0.0
+    dd = drawdown(pd.concat([pd.Series([1.0]), part.reset_index(drop=True)]))
+
+    t = result.trades_df()
+    if len(t):
+        d = pd.to_datetime(t["date"])
+        t = t[(d >= start) & (d <= end)]
+    daily = result.daily[(result.daily.index >= start) & (result.daily.index <= end)]
+    return PeriodMetrics(
+        start=part.index[0], end=part.index[-1], twr_total=total, twr_annual=annual,
+        max_drawdown=float(dd.min()), n_trades=len(t),
+        n_sells=int((t["side"] == "売り").sum()) if len(t) else 0,
+        slippage=float(t["slippage_cost"].sum()) if len(t) else 0.0,
+        exposure=exposure(daily),
+    )

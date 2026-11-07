@@ -58,6 +58,14 @@ class PathConfig:
 
 
 @dataclass(frozen=True)
+class ComparisonConfig:
+    """戦略の比べ方（compare.py 用）。選ぶ期間で一番良い戦略を決め、確かめる期間で試す。"""
+    select_period: PeriodConfig
+    check_period: PeriodConfig
+    candidates: tuple[StrategyConfig, ...]
+
+
+@dataclass(frozen=True)
 class Config:
     symbols: tuple[SymbolConfig, ...]
     period: PeriodConfig
@@ -65,6 +73,7 @@ class Config:
     costs: CostConfig
     strategy: StrategyConfig
     paths: PathConfig
+    comparison: ComparisonConfig | None = None   # 書いていなければ None
 
 
 # ------------------------------------------------------------
@@ -99,6 +108,7 @@ def parse_config(raw: Any, base_dir: Path = Path(".")) -> Config:
         costs=_parse_costs(raw.get("costs")),
         strategy=_parse_strategy(raw.get("strategy")),
         paths=_parse_paths(raw.get("paths", {}), base_dir),
+        comparison=_parse_comparison(raw.get("comparison")),
     )
 
 
@@ -194,6 +204,38 @@ def _parse_strategy(raw: Any) -> StrategyConfig:
     if not isinstance(params, dict):
         raise ConfigError("strategy.params は「名前: 値」の形で書いてください")
     return StrategyConfig(name=name.strip(), params=dict(params))
+
+
+def _parse_comparison(raw: Any) -> ComparisonConfig | None:
+    if raw is None:
+        return None
+    raw = _require_dict(raw, "comparison")
+    select = _parse_period_named(raw.get("select_period"), "comparison.select_period")
+    check = _parse_period_named(raw.get("check_period"), "comparison.check_period")
+    if select.end is None:
+        raise ConfigError("comparison.select_period.end（選ぶ期間の終わり）を書いてください")
+    if check.start <= select.end:
+        raise ConfigError(
+            f"確かめる期間の開始（{check.start}）は、選ぶ期間の終わり（{select.end}）より"
+            "後にしてください（重なると、選ぶときに使った値動きで確かめることになります）")
+    items = raw.get("candidates")
+    if not isinstance(items, list) or not items:
+        raise ConfigError("comparison.candidates に比べる戦略を1つ以上書いてください")
+    cands = tuple(_parse_strategy(c) for c in items)
+    seen = set()
+    for c in cands:
+        key = (c.name, tuple(sorted(c.params.items())))
+        if key in seen:
+            raise ConfigError(f"comparison.candidates に同じ戦略が2回あります: {c.name} {c.params}")
+        seen.add(key)
+    return ComparisonConfig(select_period=select, check_period=check, candidates=cands)
+
+
+def _parse_period_named(raw: Any, where: str) -> PeriodConfig:
+    try:
+        return _parse_period(raw)
+    except ConfigError as e:
+        raise ConfigError(f"{where}: {e}") from None
 
 
 def _parse_paths(raw: Any, base_dir: Path) -> PathConfig:

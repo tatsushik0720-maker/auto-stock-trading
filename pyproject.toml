@@ -1,0 +1,9 @@
+[project]
+name = "stock-sim"
+version = "0.1.0"
+description = "株の架空売買シミュレータ（実際の注文は出さない検証用）"
+requires-python = ">=3.10"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

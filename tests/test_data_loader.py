@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 
 from sim.data_loader import (
-    COLUMNS, JST, DataError, find_missing_days, load_all, load_prices, repair_unit_errors,
+    COLUMNS, JST, MAX_GLITCH_DAYS, DataError, find_missing_days, load_all, load_prices, repair_unit_errors,
 )
 
 START = date(2024, 1, 1)
@@ -138,33 +138,96 @@ def test_empty_period_is_an_error(tmp_path):
 
 
 # ---- データの誤りの修正 --------------------------------------
+# 方針: 「前後の日と比べてほぼ 1/10・1/100 になっている日」だけを直す。
+#       本物の大きな値動きは直さない。
+
+PRICES = ["Open", "High", "Low", "Close", "Adj Close"]
+
+
+def scaled(df, days, factor):
+    """指定した日の価格だけ factor 倍にした偽データ。"""
+    df = df.copy()
+    df.loc[df.index[days], PRICES] *= factor
+    return df
+
 
 def test_repair_split_glitch_1_over_100():
     """1321.T で実際に見つかった誤り: 分割直後の2日だけ価格が 1/100。"""
     df = make_prices()
     bad = df.index[10:12]
-    df.loc[bad, ["Open", "High", "Low", "Close", "Adj Close"]] /= 100
+    df.loc[bad, PRICES] /= 100
     df.loc[bad, "Volume"] *= 100
-    fixed, notes = repair_unit_errors(df)
+    fixed, notes, warnings = repair_unit_errors(df)
     pd.testing.assert_frame_equal(fixed, make_prices())
-    assert len(notes) == 1 and "2日" in notes[0] and "100倍" in notes[0]
+    assert len(notes) == 1 and "2日" in notes[0] and "1/100" in notes[0]
+    assert warnings == []
 
 
 def test_repair_split_glitch_1_over_10():
     """1306.T で実際に見つかった誤り: 2日だけ価格が 1/10。"""
-    df = make_prices()
-    df.loc[df.index[30:32], ["Open", "High", "Low", "Close", "Adj Close"]] /= 10
-    fixed, notes = repair_unit_errors(df)
+    df = scaled(make_prices(), slice(30, 32), 0.1)
+    fixed, notes, _ = repair_unit_errors(df)
     assert fixed["Close"].to_numpy() == pytest.approx(make_prices()["Close"].to_numpy())
-    assert "10倍" in notes[0]
+    assert len(notes) == 1 and "10倍" in notes[0]
 
 
-def test_normal_moves_are_not_repaired():
+def test_repair_single_day_10x_spike():
+    """逆向き（1日だけ10倍）の桁ずれも直す。"""
+    df = scaled(make_prices(), slice(15, 16), 10)
+    fixed, notes, _ = repair_unit_errors(df)
+    assert fixed["Close"].to_numpy() == pytest.approx(make_prices()["Close"].to_numpy())
+    assert "1/10" in notes[0]
+
+
+def test_repair_handles_normal_moves_inside_the_glitch():
+    """ずれている2日の間に普通の値動き(+3%)があっても、倍率どおりに戻す。"""
     df = make_prices()
-    df.loc[df.index[20]:, ["Open", "High", "Low", "Close", "Adj Close"]] *= 0.85  # 15%下落
-    fixed, notes = repair_unit_errors(df)
+    df.loc[df.index[21], PRICES] *= 1.03
+    expected = df.copy()
+    df.loc[df.index[20:22], PRICES] /= 100
+    fixed, notes, _ = repair_unit_errors(df)
+    assert fixed["Close"].to_numpy() == pytest.approx(expected["Close"].to_numpy())
+
+
+@pytest.mark.parametrize("factor", [0.85, 0.5, 0.3, 1.8, 3.0])
+def test_real_big_moves_are_not_repaired(factor):
+    """本物の大きな値動き（-15%、半値、-70%、+80%、3倍）は 10 のべき乗ではないので直さない。"""
+    df = scaled(make_prices(), slice(20, None), factor)  # 20日目以降ずっとその水準
+    fixed, notes, _ = repair_unit_errors(df)
     assert notes == []
     pd.testing.assert_frame_equal(fixed, df)
+
+
+def test_big_crash_and_rebound_is_not_repaired():
+    """1日 -60% のあと翌日に戻る、のような本物の乱高下も直さない。"""
+    df = scaled(make_prices(), slice(20, 21), 0.4)
+    fixed, notes, _ = repair_unit_errors(df)
+    assert notes == []
+    pd.testing.assert_frame_equal(fixed, df)
+
+
+def test_drop_to_1_over_10_that_never_returns_is_not_repaired():
+    """1/10 になったまま戻らない場合は本物の変化かもしれない → 直さず警告だけ。"""
+    df = scaled(make_prices(), slice(30, None), 0.1)
+    fixed, notes, warnings = repair_unit_errors(df)
+    assert notes == []
+    pd.testing.assert_frame_equal(fixed, df)
+    assert len(warnings) == 1 and "直していません" in warnings[0]
+
+
+def test_glitch_on_last_day_is_not_repaired():
+    """最終日だけ 1/100 → 翌日がないので確かめられない → 直さず警告。"""
+    df = make_prices()
+    df = scaled(df, slice(len(df) - 1, None), 0.01)
+    fixed, notes, warnings = repair_unit_errors(df)
+    assert notes == [] and len(warnings) == 1
+
+
+def test_glitch_longer_than_limit_is_not_repaired():
+    """1/10 のずれが MAX_GLITCH_DAYS を超えて続く場合は直さない。"""
+    df = scaled(make_prices(), slice(10, 10 + MAX_GLITCH_DAYS + 1), 0.1)
+    fixed, notes, warnings = repair_unit_errors(df)
+    assert notes == [] and warnings
 
 
 def test_rows_with_missing_values_are_dropped(tmp_path):
@@ -208,3 +271,29 @@ def test_load_all_reports_gaps(tmp_path):
     result = load_all(["A", "B"], START, None, tmp_path, fetch, now=at(2024, 3, 29))
     assert result["A"].warnings == []
     assert any("2024-02-14" in w for w in result["B"].warnings)
+
+
+def test_missing_day_is_not_filled(tmp_path):
+    """欠けている日は前日の価格で埋めず、「その日は取引なし」として行が無いままにする。"""
+    fetchers = {"A": FakeFetcher(make_prices()),
+                "B": FakeFetcher(make_prices(skip=["2024-02-14"]))}
+
+    def fetch(symbol, start, end):
+        return fetchers[symbol](symbol, start, end)
+
+    result = load_all(["A", "B"], START, None, tmp_path, fetch, now=at(2024, 3, 29))
+    assert pd.Timestamp("2024-02-14") in result["A"].df.index
+    assert pd.Timestamp("2024-02-14") not in result["B"].df.index
+    assert len(result["B"].df) == len(result["A"].df) - 1
+
+
+def test_zero_volume_rows_are_treated_as_no_trading(tmp_path):
+    """Yahoo が祝日に入れる「出来高0・前日と同じ値」の行は、取引なしとして除く。"""
+    full = make_prices()
+    holiday = pd.Timestamp("2024-01-08")
+    full.loc[holiday, ["Open", "High", "Low", "Close", "Adj Close"]] = full["Close"].iloc[4]
+    full.loc[holiday, "Volume"] = 0
+    p = load_prices("AAA", START, None, tmp_path, FakeFetcher(full), now=at(2024, 3, 29))
+    assert holiday not in p.df.index
+    assert len(p.df) == len(full) - 1
+    assert any("出来高0" in n and "2024-01-08" in n for n in p.notes)

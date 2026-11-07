@@ -99,8 +99,14 @@ def load_prices(symbol: str, start: date, end: date | None, data_dir: Path,
     df, dropped = _drop_incomplete_rows(df)
     if dropped:
         warnings.append(f"値が欠けた行を {dropped} 行除きました")
-    df, repairs = repair_unit_errors(df)
+    df, no_trade = _drop_no_trade_rows(df)
+    if len(no_trade):
+        shown = ", ".join(str(d.date()) for d in no_trade[:3])
+        notes.append(f"出来高0の行（休場日などに前日の値を入れた行）を {len(no_trade)} 行除きました"
+                     f"（{shown} など）。その日は取引なしとして扱います")
+    df, repairs, suspicious = repair_unit_errors(df)
     notes.extend(repairs)
+    warnings.extend(suspicious)
     warnings.extend(_suspicious_moves(df))
     if df.empty:
         raise DataError(f"{symbol}: 指定期間（{start}〜{end or '最新'}）のデータがありません")
@@ -136,43 +142,62 @@ def summarize(p: PriceData) -> str:
 # データの点検・修正
 # ============================================================
 
-def repair_unit_errors(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
-    """前日比がほぼ 1/10・1/100（または10倍・100倍）になった日を、Yahoo の誤りとして直す。
+MAX_GLITCH_DAYS = 10  # 桁ずれとみなす連続日数の上限
+
+
+def repair_unit_errors(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str], list[str]]:
+    """前後の日と比べて、ほぼ 1/10・1/100（または10倍・100倍）にずれた日だけを直す。
 
     例: 1→100分割の直後2日だけ、価格が調整されず 1/100 のまま入っていることがある。
-    実際の ETF の価格が1日で 1/10 になることはまずないため、桁ずれとみなして戻す。
+
+    直す条件（両方を満たすときだけ）:
+      1. ある日、前日比がほぼ 10 のべき乗倍（1/10、1/100 など）に跳ぶ
+      2. その後 MAX_GLITCH_DAYS 日以内に、逆向きに同じ倍率で跳んで元の水準へ戻る
+         （途中の日は普通の値動き）
+    本物の値動き（-15%、-50% など）は 10 のべき乗ではないので直さない。
+    ずれたまま戻らない場合は、本物の変化かもしれないので直さず、警告だけ出す。
     """
     if df.empty:
-        return df, []
+        return df, [], []
     df = df.copy()
     close = df["Close"].to_numpy(dtype=float)
-    factors = [1.0] * len(df)
-    ref = close[0]
-    for i in range(1, len(df)):
-        ratio = close[i] / ref
-        factor = _unit_factor(ratio)
-        factors[i] = factor
-        ref = close[i] * factor  # 直した後の値を次の日の比較基準にする
+    n = len(close)
+    jump = [1.0] + [_unit_factor(close[i] / close[i - 1]) for i in range(1, n)]
 
-    repairs: list[str] = []
-    i = 0
-    while i < len(df):
-        if factors[i] == 1.0:
+    notes: list[str] = []      # 直したこと
+    warnings: list[str] = []   # 直さなかったが怪しいこと
+    i = 1
+    while i < n:
+        f = jump[i]
+        if f == 1.0:
             i += 1
             continue
-        j = i
-        while j + 1 < len(df) and factors[j + 1] == factors[i]:
-            j += 1
-        f = factors[i]
-        rows = df.index[i:j + 1]
+        # i 日目で桁がずれた。元に戻る日（逆向きの跳び）を探す
+        end = None
+        for j in range(i + 1, min(i + MAX_GLITCH_DAYS, n - 1) + 1):
+            if jump[j] == 1.0 / f:
+                end = j - 1   # i〜end 日目がずれている
+                break
+            if jump[j] != 1.0:
+                break         # 別の跳びが混ざる → 判断できない
+        if end is None:
+            warnings.append(f"{df.index[i].date()} に価格がほぼ {_ratio_text(1 / f)} に跳び、"
+                         f"元に戻らないため直していません。データを確認してください")
+            i += 1
+            continue
+        rows = df.index[i:end + 1]
         df.loc[rows, PRICE_COLUMNS] = df.loc[rows, PRICE_COLUMNS] * f
         df.loc[rows, "Volume"] = (df.loc[rows, "Volume"] / f).round()
-        shown = f"{f:g}倍" if f >= 1 else f"1/{1 / f:g}"
-        repairs.append(
-            f"{rows[0].date()}〜{rows[-1].date()}（{len(rows)}日）の価格が桁ずれしていたため"
-            f" {shown} に直しました（分割の調整漏れとみられます）")
-        i = j + 1
-    return df, repairs
+        notes.append(
+            f"{rows[0].date()}〜{rows[-1].date()}（{len(rows)}日）の価格が前後の日の約"
+            f"{_ratio_text(1 / f)}になっていたため {_ratio_text(f)} に直しました"
+            f"（分割の調整漏れとみられます）")
+        i = end + 2  # 戻った日の次から再開
+    return df, notes, warnings
+
+
+def _ratio_text(f: float) -> str:
+    return f"{f:g}倍" if f >= 1 else f"1/{1 / f:g}"
 
 
 def find_missing_days(dfs: dict[str, pd.DataFrame]) -> dict[str, list[str]]:
@@ -195,7 +220,8 @@ def find_missing_days(dfs: dict[str, pd.DataFrame]) -> dict[str, list[str]]:
                 shown = ", ".join(str(x.date()) for x in missing[:5])
                 more = f" ほか{len(missing) - 5}日" if len(missing) > 5 else ""
                 result[s].append(
-                    f"他の銘柄にはある {len(missing)} 日分のデータがありません: {shown}{more}")
+                    f"他の銘柄にはある {len(missing)} 日分のデータがありません: {shown}{more}"
+                    f"（前日の価格で埋めず、その日は取引なしとして扱います）")
     for s, d in non_empty.items():
         gaps = d.index.to_series().diff().dt.days
         for day, g in gaps[gaps > MAX_NORMAL_GAP_DAYS].items():
@@ -222,6 +248,13 @@ def _suspicious_moves(df: pd.DataFrame, threshold: float = 0.3) -> list[str]:
     big = change[change > threshold]
     return [f"{d.date()} に終値が前日から {v:.0%} 動いています（データの誤りの可能性）"
             for d, v in big.items()]
+
+
+def _drop_no_trade_rows(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DatetimeIndex]:
+    """出来高0の行を除く。Yahoo は祝日などに前日の終値で埋めた行を入れることがあるが、
+    それは実際の取引ではないので「その日は取引なし」とする（前日の値で埋めない方針）。"""
+    no_trade = df["Volume"] == 0
+    return df[~no_trade], df.index[no_trade]
 
 
 def _drop_incomplete_rows(df: pd.DataFrame) -> tuple[pd.DataFrame, int]:

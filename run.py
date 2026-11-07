@@ -6,7 +6,7 @@
     python run.py --config 別の設定.yaml
 
 ※実際の注文は一切出しません。
-※段階2の時点では「設定の表示」と「データ取得・点検」までです。
+※段階3の時点では「設定の表示」「データ取得・点検」「戦略の合図の一覧」までです。
 """
 
 from __future__ import annotations
@@ -19,6 +19,9 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 from sim.config import Config, ConfigError, load_config  # noqa: E402
 from sim.data_loader import DataError, load_all, summarize  # noqa: E402
+from sim.strategies import (  # noqa: E402
+    Signal, StrategyError, create_strategy, generate_signals, signal_changes,
+)
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -26,6 +29,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--config", default="config.yaml", help="設定ファイルのパス")
     p.add_argument("--fee-rate", type=float, help="手数料率を一時的に上書き（例: 0.001 = 0.1%%）")
     p.add_argument("--tax-rate", type=float, help="税率を一時的に上書き（例: 0.20315）")
+    p.add_argument("--show-signals", type=int, default=5,
+                   help="合図の一覧で、最初と最後に表示する件数（初期値5）")
     return p.parse_args(argv)
 
 
@@ -69,7 +74,38 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     for p in prices.values():
         print(summarize(p))
+
+    print(f"\n=== 戦略の合図: {cfg.strategy.name} {cfg.strategy.params} ===")
+    try:
+        strategy = create_strategy(cfg.strategy.name, cfg.strategy.params)
+    except StrategyError as e:
+        print(f"[戦略エラー] {e}", file=sys.stderr)
+        return 1
+    for p in prices.values():
+        signals = generate_signals(strategy, p.symbol, p.df)
+        print(format_signal_changes(p.symbol, signals, show=args.show_signals))
     return 0
+
+
+def format_signal_changes(symbol: str, signals, show: int = 5) -> str:
+    """合図が変わった日の一覧（最初と最後の show 件）を表にする。"""
+    changes = signal_changes(signals)
+    n_buy = int((changes["signal"] == Signal.BUY).sum())
+    n_sell = int((changes["signal"] == Signal.SELL).sum())
+    lines = [f"■ {symbol}  合図が変わった日: {len(changes)}回（買い {n_buy} / 売り {n_sell}）",
+             f"  {'日付':<10}  {'終値':>8}  {'平均':>8}  合図"]
+
+    def row(day, r):
+        sma = "" if r.get("sma") is None else f"{r['sma']:>8,.1f}"
+        return f"  {day.date()}  {r['Close']:>8,.1f}  {sma:>8}  {r['signal'].value}"
+
+    if len(changes) <= show * 2:
+        lines += [row(d, r) for d, r in changes.iterrows()]
+    else:
+        lines += [row(d, r) for d, r in changes.head(show).iterrows()]
+        lines.append(f"  …（{len(changes) - show * 2}件省略）…")
+        lines += [row(d, r) for d, r in changes.tail(show).iterrows()]
+    return "\n".join(lines)
 
 
 if __name__ == "__main__":

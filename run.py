@@ -136,7 +136,10 @@ def main(argv: list[str] | None = None) -> int:
     if cfg.forward is not None:   # フォワードテストの記録も同じ画面で見られるように
         fwd = cfg.forward
         forward = forward_dataset(fwd.dir, fwd.benchmark, cfg.account.initial_cash,
-                                  [s.code for s in cfg.symbols], fwd.start, datetime.now(JST))
+                                  [s.code for s in cfg.symbols], fwd.start, datetime.now(JST),
+                                  prices={s: p.df for s, p in prices.items()},
+                                  shuffle_runs=(cfg.ml_comparison.shuffle_runs
+                                                if cfg.ml_comparison else 20))
     paths["game"] = write_game(out / "game.html", replay, forward)
     print("\n出力: " + ", ".join(str(p) for p in paths.values()))
     return 0

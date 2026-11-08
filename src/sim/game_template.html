@@ -42,6 +42,13 @@
   --bench: #8b5000; --bench-c: #ffdcbe; --on-bench-c: #2c1600;
   --buy: #006e1c; --sell: var(--md-error);
   --deposit: var(--md-outline);
+  /* AIくん・ランダムくん、同じキャラ同士の対戦の右側（M3 の custom color の tone 40/90/10） */
+  --ai: #7b4fa0; --ai-c: #f1dbff; --on-ai-c: #2e004e;
+  --rnd: #5b6470; --rnd-c: #dde3eb; --on-rnd-c: #161c23;
+  --alt: #9c4060; --alt-c: #ffd9e2; --on-alt-c: #3e001d;
+  /* 画面の左（A）と右（B）の選手の色。選んだキャラに合わせて JS が差し替える */
+  --A: var(--strat); --A-c: var(--strat-c); --on-A-c: var(--on-strat-c);
+  --B: var(--bench); --B-c: var(--bench-c); --on-B-c: var(--on-bench-c);
 
   /* 角丸・影・動き */
   --shape-xs: 4px; --shape-sm: 8px; --shape-md: 12px; --shape-lg: 16px; --shape-xl: 28px; --shape-full: 999px;
@@ -66,6 +73,9 @@
     --md-inverse-surface: #e1e2e8; --md-inverse-on-surface: #2e3135; --md-inverse-primary: #0061a4;
     --bench: #ffb870; --bench-c: #693c00; --on-bench-c: #ffdcbe;
     --buy: #78dc77;
+    --ai: #dfb8ff; --ai-c: #5f3584; --on-ai-c: #f1dbff;
+    --rnd: #b6bec9; --rnd-c: #3f4751; --on-rnd-c: #dde3eb;
+    --alt: #ffb1c6; --alt-c: #7d2948; --on-alt-c: #ffd9e2;
   }
 }
 
@@ -118,7 +128,7 @@ svg.ic-s { width: 18px; height: 18px; fill: currentColor; flex: none; }
 .topbar.scrolled { background: var(--md-surface-container); box-shadow: var(--elev-2); }
 .topbar .bar { height: 64px; display: flex; align-items: center; justify-content: center; padding: 0 16px; }
 .topbar h1 { margin: 0; white-space: nowrap; }
-.topbar .s { color: var(--strat); } .topbar .b { color: var(--bench); }
+.topbar .s { color: var(--A); } .topbar .b { color: var(--B); }
 .topbar .x { color: var(--md-on-surface-variant); margin: 0 8px; }
 
 .app {
@@ -159,6 +169,45 @@ svg.ic-s { width: 18px; height: 18px; fill: currentColor; flex: none; }
 .field select:focus + label { color: var(--md-primary); }
 .field .arrow { position: absolute; right: 12px; top: 16px; pointer-events: none; color: var(--md-on-surface-variant); }
 
+.pickers { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.pickers .field select { padding-right: 36px; }
+.pickers .field .arrow { right: 8px; }
+
+/* AIくんの予想メーター（線形のしるし 8px・角丸 full。基準の線つき） */
+.ai-card { border-color: color-mix(in srgb, var(--ai) 45%, var(--md-outline-variant)); }
+.ai-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.ai-head .t { color: var(--ai); }
+.ai-head .sub { color: var(--md-on-surface-variant); }
+.meter-row { display: grid; grid-template-columns: 72px 1fr 44px 40px; align-items: center; gap: 8px; margin-top: 12px; }
+.meter-row .sym { color: var(--md-on-surface-variant); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.meter { position: relative; height: 8px; border-radius: var(--shape-full); background: var(--md-surface-container-highest); margin: 10px 0 14px; }
+.meter .fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: var(--shape-full); background: var(--md-outline); transition: width 200ms var(--ease); }
+.meter.on .fill { background: var(--ai); }
+.meter .th { position: absolute; top: -6px; bottom: -6px; width: 2px; margin-left: -1px; background: var(--md-on-surface); border-radius: 1px; }
+.meter .th-l { position: absolute; top: 12px; transform: translateX(-50%); color: var(--md-on-surface-variant); white-space: nowrap; }
+.meter-row .val { text-align: right; }
+.meter-row .act { text-align: center; border-radius: var(--shape-xs); padding: 0 2px; color: var(--md-on-surface-variant); }
+.meter-row .act.on { background: var(--ai-c); color: var(--on-ai-c); }
+.ai-top { margin-top: 4px; padding-top: 12px; border-top: 1px solid var(--md-outline-variant); color: var(--md-on-surface-variant); transition: background-color 600ms var(--ease); border-radius: 0 0 var(--shape-sm) var(--shape-sm); }
+.ai-top.flash { background: color-mix(in srgb, var(--ai) 14%, transparent); transition: none; }
+.ai-top .cap { color: var(--md-on-surface); }
+.ai-top .feat { margin-top: 4px; overflow-wrap: anywhere; }
+.ai-top .feat b { font-weight: 500; color: var(--md-on-surface); }
+.ai-top .feat .f { white-space: nowrap; }
+.ai-top .hint { margin-top: 6px; }
+.ml-res { margin-top: 24px; padding: 16px; border-radius: var(--shape-lg); background: var(--md-surface-container); }
+.ml-res .hd { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ml-res .vs .a { color: var(--ai); } .ml-res .vs .r { color: var(--rnd); }
+.ml-res .chip-v { height: 32px; display: inline-flex; align-items: center; padding: 0 12px; border-radius: var(--shape-sm); }
+.ml-res .chip-v.learned { background: var(--ai-c); color: var(--on-ai-c); }
+.ml-res .chip-v.not_learned { background: var(--md-error-container); color: var(--md-on-error-container); }
+.ml-res .chip-v.pending { background: var(--md-surface-container-highest); color: var(--md-on-surface-variant); }
+.ml-res .dt { margin-top: 12px; color: var(--md-on-surface-variant); }
+.ml-res table { margin-top: 8px; }
+.ml-res th, .ml-res td { padding: 8px 4px; }
+.ml-res td.ph { padding: 12px 4px 0; border-bottom: 0; color: var(--md-on-surface-variant); text-align: left; }
+.ml-res thead th.a { color: var(--ai); } .ml-res thead th.r { color: var(--rnd); }
+
 /* 日付 */
 .datebox { text-align: center; padding: 4px 0; }
 .datebox .sub { color: var(--md-on-surface-variant); }
@@ -173,14 +222,14 @@ svg.ic-s { width: 18px; height: 18px; fill: currentColor; flex: none; }
 .board { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .player { padding: 12px; border: 2px solid transparent; transition: border-color 200ms var(--ease); }
 .player .who { display: flex; align-items: center; gap: 6px; min-height: 24px; }
-.player.s .who { color: var(--strat); } .player.b .who { color: var(--bench); }
+.player.s .who { color: var(--A); } .player.b .who { color: var(--B); }
 .player .chip-lead {
   display: none; align-items: center; gap: 2px; height: 24px; padding: 0 8px 0 4px; border-radius: var(--shape-sm);
 }
-.player.s .chip-lead { background: var(--strat-c); color: var(--on-strat-c); }
-.player.b .chip-lead { background: var(--bench-c); color: var(--on-bench-c); }
+.player.s .chip-lead { background: var(--A-c); color: var(--on-A-c); }
+.player.b .chip-lead { background: var(--B-c); color: var(--on-B-c); }
 .player.lead .chip-lead { display: inline-flex; }
-.player.s.lead { border-color: var(--strat); } .player.b.lead { border-color: var(--bench); }
+.player.s.lead { border-color: var(--A); } .player.b.lead { border-color: var(--B); }
 .player .label { color: var(--md-on-surface-variant); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .money { margin-top: 8px; white-space: nowrap; transition: color 200ms var(--ease); font-weight: 500; }
 .money .yen { font-size: 14px; color: var(--md-on-surface-variant); margin-left: 2px; font-weight: 400; }
@@ -191,7 +240,7 @@ svg.ic-s { width: 18px; height: 18px; fill: currentColor; flex: none; }
 
 /* リード（線形のしるし: 4px、角丸 full） */
 .lead-text { display: flex; justify-content: center; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-.lead-text.s { color: var(--strat); } .lead-text.b { color: var(--bench); } .lead-text.e { color: var(--md-on-surface-variant); }
+.lead-text.s { color: var(--A); } .lead-text.b { color: var(--B); } .lead-text.e { color: var(--md-on-surface-variant); }
 .tug { position: relative; height: 4px; background: var(--md-surface-container-highest); border-radius: var(--shape-full); margin-top: 12px; }
 .tug .mid { position: absolute; left: 50%; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; background: var(--md-outline); border-radius: 1px; }
 .tug .fill { position: absolute; top: 0; bottom: 0; border-radius: var(--shape-full); transition: left 150ms var(--ease), width 150ms var(--ease); }
@@ -294,7 +343,8 @@ input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 8px co
 }
 .call.show { transform: translate(-50%, 0); opacity: 1; }
 .call .bar { width: 4px; align-self: stretch; border-radius: 2px; background: var(--md-inverse-primary); flex: none; }
-.call.b .bar { background: var(--bench); } .call.d .bar { background: var(--sell); }
+.call.s .bar { background: var(--A); } .call.b .bar { background: var(--B); } .call.d .bar { background: var(--sell); }
+.call.ai .bar { background: var(--ai); }
 
 /* ダイアログ（surface-container-high・角丸 28px・余白 24px） */
 .over {
@@ -315,7 +365,7 @@ input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 8px co
 table { width: 100%; border-collapse: collapse; margin-top: 16px; }
 th, td { padding: 12px 4px; border-bottom: 1px solid var(--md-outline-variant); text-align: right; white-space: nowrap; }
 th:first-child, td:first-child { text-align: left; color: var(--md-on-surface-variant); white-space: normal; }
-thead th.s { color: var(--strat); } thead th.b { color: var(--bench); }
+thead th.s { color: var(--A); } thead th.b { color: var(--B); }
 td.win { font-weight: 700; }
 td.win::after { content: " ★"; color: var(--md-primary); font-size: 12px; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px; flex-wrap: wrap; }
@@ -327,8 +377,8 @@ td.win::after { content: " ★"; color: var(--md-primary); font-size: 12px; }
 .today-head .d { color: var(--md-on-surface-variant); white-space: nowrap; }
 .today-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px; }
 .tcol { border-radius: var(--shape-md); padding: 12px; min-width: 0; }
-.tcol.s { background: var(--strat-c); color: var(--on-strat-c); }
-.tcol.b { background: var(--bench-c); color: var(--on-bench-c); }
+.tcol.s { background: var(--A-c); color: var(--on-A-c); }
+.tcol.b { background: var(--B-c); color: var(--on-B-c); }
 .tcol .big { margin-top: 4px; white-space: nowrap; font-weight: 500; }
 .tcol .big .yen { font-size: 14px; margin-left: 2px; font-weight: 400; }
 .tcol .chg { margin-top: 4px; white-space: nowrap; }
@@ -337,7 +387,7 @@ td.win::after { content: " ★"; color: var(--md-primary); font-size: 12px; }
 .tcol .tr { margin-top: 8px; overflow-wrap: anywhere; opacity: .9; }
 .today-lead { text-align: center; margin-top: 16px; }
 .today-lead .w { margin-right: 8px; }
-.today-lead.s { color: var(--strat); } .today-lead.b { color: var(--bench); } .today-lead.e { color: var(--md-on-surface-variant); }
+.today-lead.s { color: var(--A); } .today-lead.b { color: var(--B); } .today-lead.e { color: var(--md-on-surface-variant); }
 .today-lead .y { display: block; color: var(--md-on-surface-variant); margin-top: 2px; }
 .totals { margin-top: 16px; border-top: 1px solid var(--md-outline-variant); padding-top: 16px; }
 .totals .cap { color: var(--md-on-surface-variant); }
@@ -366,7 +416,7 @@ td.win::after { content: " ★"; color: var(--md-primary); font-size: 12px; }
 <div class="call body-m" id="call" role="status" aria-live="polite"><span class="bar"></span><span id="callText"></span></div>
 
 <header class="topbar" id="topbar">
-  <div class="bar"><h1 class="title-l"><span class="s">戦略くん</span><span class="x">VS</span><span class="b">放置くん</span></h1></div>
+  <div class="bar"><h1 class="title-l" id="title"><span class="s">戦略くん</span><span class="x">VS</span><span class="b">放置くん</span></h1></div>
 </header>
 
 <div class="app">
@@ -380,10 +430,17 @@ td.win::after { content: " ★"; color: var(--md-primary); font-size: 12px; }
   </div>
 
   <div id="main" style="display:flex;flex-direction:column;gap:12px">
-    <div class="field" id="pickWrap">
-      <select id="pick"></select>
-      <label for="pick" class="body-s">対戦相手（戦略くんの中身）</label>
-      <svg class="ic arrow" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z"/></svg>
+    <div class="pickers" id="pickWrap">
+      <div class="field">
+        <select id="pickA"></select>
+        <label for="pickA" class="body-s">左の選手</label>
+        <svg class="ic arrow" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z"/></svg>
+      </div>
+      <div class="field">
+        <select id="pickB"></select>
+        <label for="pickB" class="body-s">右の選手</label>
+        <svg class="ic arrow" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z"/></svg>
+      </div>
     </div>
 
     <div class="datebox"><div class="display-s num" id="date">----</div><div class="sub body-s num" id="dateSub"></div></div>
@@ -392,13 +449,13 @@ td.win::after { content: " ★"; color: var(--md-primary); font-size: 12px; }
 
     <div class="board">
       <div class="card filled player s" id="cardS">
-        <div class="who title-s">戦略くん <span class="chip-lead label-m"><svg class="ic-s" viewBox="0 0 24 24"><path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>リード</span></div>
+        <div class="who title-s"><span id="nameS">戦略くん</span> <span class="chip-lead label-m"><svg class="ic-s" viewBox="0 0 24 24"><path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>リード</span></div>
         <div class="label body-s" id="labelS"></div>
         <div class="money headline-s num" id="moneyS">0<span class="yen">円</span></div>
         <div class="pct body-s num" id="pctS"></div>
       </div>
       <div class="card filled player b" id="cardB">
-        <div class="who title-s">放置くん <span class="chip-lead label-m"><svg class="ic-s" viewBox="0 0 24 24"><path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>リード</span></div>
+        <div class="who title-s"><span id="nameB">放置くん</span> <span class="chip-lead label-m"><svg class="ic-s" viewBox="0 0 24 24"><path d="M12 17.27 18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>リード</span></div>
         <div class="label body-s" id="labelB"></div>
         <div class="money headline-s num" id="moneyB">0<span class="yen">円</span></div>
         <div class="pct body-s num" id="pctB"></div>
@@ -408,14 +465,20 @@ td.win::after { content: " ★"; color: var(--md-primary); font-size: 12px; }
     <div class="card outlined">
       <div class="lead-text e" id="leadText"><span class="title-m">互角</span><span class="headline-s num">0円</span></div>
       <div class="tug"><div class="mid"></div><div class="fill" id="tug"></div></div>
-      <div class="tug-cap label-m"><span>← 戦略くん</span><span>放置くん →</span></div>
+      <div class="tug-cap label-m"><span id="capS">← 戦略くん</span><span id="capB">放置くん →</span></div>
     </div>
+
+    <section class="card outlined ai-card" id="aiCard" hidden aria-label="AIくんの予想">
+      <div class="ai-head"><span class="t title-s">AIくんの予想</span><span class="sub label-s">5営業日後に上がる確率（この日の終値で予想）</span></div>
+      <div id="meters"></div>
+      <div class="ai-top body-s" id="aiTop"></div>
+    </section>
 
     <div class="card outlined chart" id="chartWrap">
       <canvas id="chart" aria-label="資産の推移グラフ"></canvas>
       <div class="legend label-m">
-        <span><i style="background:var(--strat)"></i>戦略くん</span>
-        <span><i style="background:var(--bench)"></i>放置くん</span>
+        <span><i style="background:var(--A)"></i><span id="legS">戦略くん</span></span>
+        <span><i style="background:var(--B)"></i><span id="legB">放置くん</span></span>
         <span><i class="dash"></i>投入総額</span>
         <span><b class="m-b">▲</b>買い <b class="m-s">▼</b>売り</span>
       </div>
@@ -460,11 +523,12 @@ td.win::after { content: " ★"; color: var(--md-primary); font-size: 12px; }
     <div class="n headline-m" id="winName">-</div>
     <div class="d body-m num" id="winDiff"></div>
     <table class="body-m">
-      <thead><tr><th></th><th class="s title-s">戦略くん</th><th class="b title-s">放置くん</th></tr></thead>
+      <thead><tr><th></th><th class="s title-s" id="thS">戦略くん</th><th class="b title-s" id="thB">放置くん</th></tr></thead>
       <tbody id="resBody"></tbody>
     </table>
+    <div class="ml-res" id="mlRes" hidden></div>
     <div class="dialog-actions">
-      <button class="btn text st label-l" id="change">相手を変える</button>
+      <button class="btn text st label-l" id="change">選手を変える</button>
       <button class="btn text st label-l" id="closeRes">閉じる</button>
       <button class="btn filled st label-l" id="again">もう一度見る</button>
     </div>
@@ -494,7 +558,7 @@ const GAME = /*__GAME_DATA__*/null;
     const css = getComputedStyle(document.documentElement);
     const get = (k) => css.getPropertyValue(k).trim();
     Object.assign(C, {
-      strat: get("--strat"), bench: get("--bench"), buy: get("--buy"), sell: get("--sell"),
+      strat: get("--A"), bench: get("--B"), ai: get("--ai"), buy: get("--buy"), sell: get("--sell"),
       deposit: get("--deposit"), muted: get("--md-on-surface-variant"), line: get("--md-outline-variant"),
       surface: get("--md-surface"), primary: get("--md-primary"),
     });
@@ -503,7 +567,8 @@ const GAME = /*__GAME_DATA__*/null;
   window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { readColors(); yRange = null; });
 
   // ---------------- 状態 ----------------
-  let mode = "replay", ds = null, P = null, B = null;
+  // P = 左の選手（A）、B = 右の選手（B）。roster = 選べる全員（放置くん＋ほかの選手）
+  let mode = "replay", ds = null, P = null, B = null, roster = [];
   let pos = 0, day = 0, playing = false, speed = 1, lastT = 0;
   let disp = { s: 0, b: 0 }, flashUntil = { s: 0, b: 0 };
   let yRange = null, effects = [], lastShake = 0;
@@ -527,7 +592,7 @@ const GAME = /*__GAME_DATA__*/null;
       $("emptyMode").innerHTML = `<div class="card elevated empty-card">
         <svg class="icon" viewBox="0 0 24 24" fill="currentColor"><path d="M15 1H9v2h6V1zm-4 13h2V8h-2v6zm8.03-6.61 1.42-1.42c-.43-.51-.9-.99-1.41-1.41l-1.42 1.42A8.962 8.962 0 0 0 12 4c-4.97 0-9 4.03-9 9s4.02 9 9 9 9-4.03 9-9c0-2.12-.74-4.07-1.97-5.61zM12 20c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/></svg>
         <div class="big headline-s">${escapeHtml(head)}${rest ? `<b>${escapeHtml(rest)}</b>` : ""}</div>
-        <div class="sub body-m">開始日 ${escapeHtml(data.start)}。架空の資金で「戦略くん」と「放置くん」が毎日対戦します。<br>
+        <div class="sub body-m">開始日 ${escapeHtml(data.start)}。架空の資金で、選手たちが毎日対戦します。<br>
         平日の夕方に自動で更新されます。</div></div>`;
       return;
     }
@@ -538,27 +603,52 @@ const GAME = /*__GAME_DATA__*/null;
       $("emptyMode").innerHTML = '<div class="empty body-m">表示できるデータがありません。run.py を実行すると、ここに結果が入ります。</div>';
       return;
     }
-    mode = m; ds = data; B = ds.benchmark; markMode(m);
+    mode = m; ds = data; markMode(m);
+    // char・name が無い古いデータは、最初（benchmark）を放置くん、ほかを戦略くんとして扱う
+    roster = [ds.benchmark, ...ds.players].map((p, k) =>
+      ({ ...(k === 0 ? { char: "hold", name: "放置くん" } : { char: "strategy", name: "戦略くん" }), ...p }));
     $("main").hidden = false; $("emptyMode").hidden = true;
-    const pick = $("pick");
-    pick.innerHTML = ds.players.map((p, k) => `<option value="${k}">${escapeHtml(p.label)}</option>`).join("");
-    $("pickWrap").hidden = ds.players.length <= 1;
-    $("change").hidden = ds.players.length <= 1;
+    const opts = roster.map((p, k) => `<option value="${k}">${escapeHtml(p.name)}｜${escapeHtml(p.label)}</option>`).join("");
+    $("pickA").innerHTML = opts; $("pickB").innerHTML = opts;
     $("seek").max = ds.dates.length - 1;
     $("first").textContent = ds.dates[0];
     $("last").textContent = ds.dates[ds.dates.length - 1];
-    $("labelB").textContent = B.label;
     $("today").hidden = ds.kind !== "forward";
-    setPlayer(0);
+    // はじめは「戦略くん VS 放置くん」。戦略くんがいなければ最初の選手
+    let a = roster.findIndex((p) => p.char === "strategy");
+    if (a < 0) a = 1;
+    setPair(a, 0);
   }
   function markMode(m) {
     document.querySelectorAll("#modes button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === m)));
   }
 
-  function setPlayer(k) {
-    P = ds.players[k];
-    $("labelS").textContent = P.label;
-    $("pick").value = String(k);
+  // 左右の選手を決める。キャラの色を左右に当て、同じキャラ同士なら右は別の色にする
+  const COLOR_OF = { hold: "bench", strategy: "strat", ai: "ai", random: "rnd" };
+  let pickIdx = [1, 0];
+  function setPair(a, b) {
+    pickIdx = [a, b];
+    P = roster[a]; B = roster[b];
+    $("pickA").value = String(a); $("pickB").value = String(b);
+    const ca = COLOR_OF[P.char] || "strat";
+    let cb = COLOR_OF[B.char] || "bench";
+    if (cb === ca) cb = "alt";
+    const st = document.documentElement.style;
+    for (const [side, c] of [["A", ca], ["B", cb]]) {
+      st.setProperty(`--${side}`, `var(--${c})`);
+      st.setProperty(`--${side}-c`, `var(--${c}-c)`);
+      st.setProperty(`--on-${side}-c`, `var(--on-${c}-c)`);
+    }
+    readColors();
+    $("title").innerHTML = `<span class="s">${escapeHtml(P.name)}</span><span class="x">VS</span><span class="b">${escapeHtml(B.name)}</span>`;
+    document.title = `${P.name} VS ${B.name}`;
+    $("nameS").textContent = P.name; $("nameB").textContent = B.name;
+    $("labelS").textContent = P.label; $("labelB").textContent = B.label;
+    $("capS").textContent = `← ${P.name}`; $("capB").textContent = `${B.name} →`;
+    $("legS").textContent = P.name; $("legB").textContent = B.name;
+    AI = [P, B].find((p) => p.char === "ai" && p.ml) || null;
+    $("aiCard").hidden = !AI;
+    aiShownDay = -1;
     buildScenes();
     // フォワードテストは「今日」の画面から始める（再生すると開始日から）
     seek(ds.kind === "forward" ? ds.dates.length - 1 : 0);
@@ -588,20 +678,20 @@ const GAME = /*__GAME_DATA__*/null;
     const prev = L > 0 ? P.equity[L - 1] - B.equity[L - 1] : 0;
     const leadHtml = Math.abs(lead) < 1
       ? `<div class="today-lead e"><span class="w title-m">互角</span><span class="headline-m num">0円</span></div>`
-      : `<div class="today-lead ${lead > 0 ? "s" : "b"}"><span class="w title-m">${lead > 0 ? "戦略リード" : "放置リード"}</span><span class="headline-m num">+${yen(Math.abs(lead))}円</span>
-         <span class="y body-s num">${L > 0 ? `前の日より戦略くんが ${signedYen(lead - prev)}` : "初日"}</span></div>`;
+      : `<div class="today-lead ${lead > 0 ? "s" : "b"}"><span class="w title-m">${escapeHtml(lead > 0 ? P.name : B.name)}がリード</span><span class="headline-m num">+${yen(Math.abs(lead))}円</span>
+         <span class="y body-s num">${L > 0 ? `前の日より${escapeHtml(P.name)}が ${signedYen(lead - prev)}` : "初日"}</span></div>`;
     let win = 0, lose = 0, tie = 0;
     for (let j = 0; j <= L; j++) { const l = P.equity[j] - B.equity[j]; if (Math.abs(l) < 1) tie++; else if (l > 0) win++; else lose++; }
     const n = L + 1, w = (x) => (x / n * 100).toFixed(1) + "%";
     const seg = (x, color) => (x ? `<span style="width:${w(x)};background:${color}"></span>` : "");
     $("today").innerHTML = `
       <div class="today-head"><span class="t title-m">今日の対戦結果</span><span class="d label-m num">${md(ds.dates[L])}・${n}営業日目</span></div>
-      <div class="today-grid">${col(P, "s", "戦略くん")}${col(B, "b", "放置くん")}</div>
+      <div class="today-grid">${col(P, "s", escapeHtml(P.name))}${col(B, "b", escapeHtml(B.name))}</div>
       ${leadHtml}
       <div class="totals">
         <div class="cap label-m">開始（${md(ds.dates[0])}）からの通算 ${n}営業日</div>
-        <div class="tbar">${seg(win, "var(--strat)")}${seg(tie, "var(--md-outline-variant)")}${seg(lose, "var(--bench)")}</div>
-        <div class="tnums label-m num"><span><i style="background:var(--strat)"></i>戦略リード ${win}日</span><span><i style="background:var(--md-outline-variant)"></i>同点 ${tie}日</span><span><i style="background:var(--bench)"></i>ビハインド ${lose}日</span></div>
+        <div class="tbar">${seg(win, "var(--A)")}${seg(tie, "var(--md-outline-variant)")}${seg(lose, "var(--B)")}</div>
+        <div class="tnums label-m num"><span><i style="background:var(--A)"></i>${escapeHtml(P.name)}リード ${win}日</span><span><i style="background:var(--md-outline-variant)"></i>同点 ${tie}日</span><span><i style="background:var(--B)"></i>ビハインド ${lose}日</span></div>
       </div>
       <div class="updated label-s num">更新 ${escapeHtml(String(ds.updated_at).replace("T", " ").slice(0, 16))}</div>`;
   }
@@ -672,7 +762,7 @@ const GAME = /*__GAME_DATA__*/null;
     const tie = Math.abs(lead) < 1;
     lt.className = "lead-text " + (tie ? "e" : lead > 0 ? "s" : "b");
     lt.innerHTML = tie ? '<span class="title-m">互角</span><span class="headline-s num">0円</span>'
-      : `<span class="title-m">${lead > 0 ? "戦略リード" : "放置リード"}</span><span class="headline-s num">+${yen(Math.abs(lead))}円</span>`;
+      : `<span class="title-m">${escapeHtml(lead > 0 ? P.name : B.name)}がリード</span><span class="headline-s num">+${yen(Math.abs(lead))}円</span>`;
     $("cardS").classList.toggle("lead", lead > 0.5);
     $("cardB").classList.toggle("lead", lead < -0.5);
     const share = Math.min(1, Math.abs(lead) / Math.max(1, B.equity[i]) / 0.3);   // 30%差で振り切れ
@@ -682,6 +772,42 @@ const GAME = /*__GAME_DATA__*/null;
     tug.style.left = lead > 0 ? (50 - share * 50) + "%" : "50%";
 
     if (full) renderLog();
+    if (AI && aiShownDay !== i) renderAI(i);
+  }
+
+  // ---------------- AIくんの予想メーターと、重視している特徴 ----------------
+  let AI = null, aiShownDay = -1;
+  const SYM_NAME = { "1321.T": "日経225", "1306.T": "TOPIX" };
+  const symName = (s) => SYM_NAME[s] || s;
+  function renderAI(i) {
+    aiShownDay = i;
+    const ml = AI.ml, th = ml.threshold;
+    const syms = Object.keys(ml.prob);
+    $("meters").innerHTML = syms.map((s) => {
+      const p = ml.prob[s][i];
+      const on = p != null && p >= th;
+      const w = p == null ? 0 : Math.round(p * 1000) / 10;
+      return `<div class="meter-row">
+        <span class="sym label-m">${escapeHtml(symName(s))}</span>
+        <div class="meter ${on ? "on" : ""}" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${p == null ? 0 : Math.round(p * 100)}" aria-label="${escapeHtml(symName(s))}が上がる確率">
+          <div class="fill" style="width:${w}%"></div><div class="th" style="left:${th * 100}%"></div>
+          <span class="th-l label-s num" style="left:${th * 100}%">基準${Math.round(th * 100)}%</span></div>
+        <span class="val title-s num">${p == null ? "—" : Math.round(p * 100) + "%"}</span>
+        <span class="act label-s ${on ? "on" : ""}">${p == null ? "様子見" : on ? "持つ" : "持たない"}</span></div>`;
+    }).join("");
+    // その日に使っているモデル（銘柄ごとに、その日以前で一番新しい学び直し）
+    const cur = {};
+    let lastDate = null;
+    for (const r of ml.retrains) {
+      if (r.i > i) break;
+      for (const [s, top] of Object.entries(r.top)) cur[s] = { top, date: r.date };
+      lastDate = r.date;
+    }
+    const ent = Object.entries(cur);
+    $("aiTop").innerHTML = !ent.length ? '<span class="cap label-m">まだ学習していません（学ぶデータが足りないあいだは様子見）</span>'
+      : `<div class="cap label-m">重視している特徴（${escapeHtml(lastDate.slice(5).replace("-", "/"))}までのデータで学習）</div>` +
+        ent.map(([s, v]) => `<div class="feat"><b>${escapeHtml(symName(s))}</b>：${v.top.map((t) => `<span class="f">${escapeHtml(t.name)}${t.sign > 0 ? "↑" : "↓"} ${Math.round(t.share * 100)}%</span>`).join("・")}</div>`).join("") +
+        '<div class="hint label-s">↑ 大きいほど上がると予想　↓ 小さいほど上がると予想　％は重視の割合</div>';
   }
 
   function setMoney(key, shown, actual, dep, now, k) {
@@ -697,7 +823,7 @@ const GAME = /*__GAME_DATA__*/null;
   const flashDir = { s: 0, b: 0 };
 
   function renderLog() {
-    const all = [...P.markers.map((m) => ["戦略くん", m]), ...B.markers.map((m) => ["放置くん", m])]
+    const all = [...P.markers.map((m) => [P.name, m]), ...B.markers.map((m) => [B.name, m])]
       .filter(([, m]) => m.i <= day).sort((a, b) => a[1].i - b[1].i).slice(-3).reverse();
     $("log").innerHTML = all.length ? all.map(([who, m]) => logLine(who, m)).join("")
       : '<div class="empty-row body-m">まだ売買はありません</div>';
@@ -706,7 +832,7 @@ const GAME = /*__GAME_DATA__*/null;
     const word = m.side === "buy" ? (m.kind === "topup" ? "積立で買い増し" : "買い") : "全部売り";
     const dot = m.kind === "topup" ? "topup" : m.side;
     return `<div class="row-item"><span class="dot ${dot}"></span><span class="when label-m num">${ds.dates[m.i].slice(5).replace("-", "/")}</span>
-      <span class="txt body-m">${who}　${escapeHtml(m.symbol)} ${word} ${m.shares.toLocaleString("ja-JP")}口</span></div>`;
+      <span class="txt body-m">${escapeHtml(who)}　${escapeHtml(m.symbol)} ${word} ${m.shares.toLocaleString("ja-JP")}口</span></div>`;
   }
 
   // ---------------- 1日進んだとき（効果と実況） ----------------
@@ -720,7 +846,7 @@ const GAME = /*__GAME_DATA__*/null;
   function initEvents(i) {
     mapS = markerIndex(P); mapB = markerIndex(B);
     const lead = P.equity[i] - B.equity[i];
-    return { leader: leaderOf(i, 0), milestone: Math.floor(Math.abs(lead) / 100000), lastTradeCall: -999, lastBigMove: -999 };
+    return { leader: leaderOf(i, 0), milestone: Math.floor(Math.abs(lead) / 100000), lastTradeCall: { s: -999, b: -999 }, lastBigMove: -999 };
   }
 
   function leaderOf(i, current) {
@@ -747,13 +873,22 @@ const GAME = /*__GAME_DATA__*/null;
       renderLog();
     } else if ((mapS.get(i) || []).length || (mapB.get(i) || []).length) renderLog();
 
-    // 実況
-    if (ms.length && i - ev.lastTradeCall > 15) {
-      const m = ms[0];
-      const syms = [...new Set(ms.map((x) => x.symbol))].join("・");
-      if (m.side === "sell") say(`戦略くん、売って逃げた！（${syms}）`, "s");
-      else say(`戦略くん、買い戻した！（${syms}）`, "s");
-      ev.lastTradeCall = i;
+    // 実況（放置くんは最初に買うだけなので、売買の実況はしない）
+    for (const [k, pl, list] of [["s", P, ms], ["b", B, mb]]) {
+      if (!list.length || pl.char === "hold" || i - ev.lastTradeCall[k] <= 15) continue;
+      const syms = [...new Set(list.map((x) => x.symbol))].join("・");
+      say(list[0].side === "sell" ? `${pl.name}、売って逃げた！（${syms}）` : `${pl.name}、買い戻した！（${syms}）`, k);
+      ev.lastTradeCall[k] = i;
+    }
+    if (AI) {
+      const r = AI.ml.retrains.find((x) => x.i === i && x.fresh);
+      if (r) {
+        say("AIくん、学び直し！", "ai");
+        renderAI(i);
+        const el = $("aiTop");
+        el.classList.add("flash"); void el.offsetWidth;
+        setTimeout(() => el.classList.remove("flash"), 60);
+      }
     }
     const tw = B.twr[i] / B.twr[i - 1] - 1;
     if (Math.abs(tw) >= 0.04 && i - ev.lastBigMove > 5) {
@@ -762,8 +897,9 @@ const GAME = /*__GAME_DATA__*/null;
     }
     const newLeader = leaderOf(i, ev.leader);
     if (newLeader !== ev.leader) {
-      if (ev.leader === 0) say(newLeader > 0 ? "戦略くんが先にリード！" : "放置くんが先にリード！", newLeader > 0 ? "s" : "b");
-      else say(newLeader > 0 ? "戦略くん、逆転！" : "放置くん、逆転！", newLeader > 0 ? "s" : "b");
+      const who = newLeader > 0 ? P.name : B.name;
+      if (ev.leader === 0) say(`${who}が先にリード！`, newLeader > 0 ? "s" : "b");
+      else say(`${who}、逆転！`, newLeader > 0 ? "s" : "b");
       ev.leader = newLeader;
       ev.milestone = 0;
     }
@@ -771,7 +907,7 @@ const GAME = /*__GAME_DATA__*/null;
     const ms10 = Math.floor(lead / 100000);
     if (ev.leader !== 0 && ms10 > ev.milestone) {
       ev.milestone = ms10;
-      say(`${ev.leader > 0 ? "戦略くん" : "放置くん"}のリードが${ms10 * 10}万円を超えた！`, ev.leader > 0 ? "s" : "b");
+      say(`${ev.leader > 0 ? P.name : B.name}のリードが${ms10 * 10}万円を超えた！`, ev.leader > 0 ? "s" : "b");
     }
   }
 
@@ -967,7 +1103,7 @@ const GAME = /*__GAME_DATA__*/null;
       }
     }
     // 3. 最大の落ち込みの始まり（戦略くん・放置くん）
-    for (const [pl, who] of [[P, "戦略くん"], [B, "放置くん"]]) {
+    for (const [pl, who] of [[P, P.name], [B, B.name]]) {
       const pk = pl.summary.dd_peak;
       if (!pk || pl.summary.max_drawdown > -0.03) continue;
       const i = d.indexOf(pk);
@@ -979,8 +1115,8 @@ const GAME = /*__GAME_DATA__*/null;
       const l = P.equity[j] - B.equity[j];
       if (l > maxS) { maxS = l; iS = j; } if (-l > maxB) { maxB = -l; iB = j; }
     }
-    if (iS >= 0 && maxS > 10000) out.push({ i: iS, text: "戦略くんの最大リード", sub: `${ym(d[iS])}・${yen(maxS)}円`, before: 40 });
-    if (iB >= 0 && maxB > 10000) out.push({ i: iB, text: "放置くんの最大リード", sub: `${ym(d[iB])}・${yen(maxB)}円`, before: 40 });
+    if (iS >= 0 && maxS > 10000) out.push({ i: iS, text: `${P.name}の最大リード`, sub: `${ym(d[iS])}・${yen(maxS)}円`, before: 40 });
+    if (iB >= 0 && maxB > 10000) out.push({ i: iB, text: `${B.name}の最大リード`, sub: `${ym(d[iB])}・${yen(maxB)}円`, before: 40 });
 
     out.sort((a, b) => a.i - b.i);
     const scenes = [];
@@ -1004,7 +1140,7 @@ const GAME = /*__GAME_DATA__*/null;
     $("winKind").textContent = ds.kind === "forward" ? "いまリードしているのは" : "勝者";
     if (Math.abs(diff) < 1) { wn.textContent = "引き分け"; wn.style.color = C.muted; $("winDiff").textContent = ""; }
     else {
-      wn.textContent = diff > 0 ? "戦略くん" : "放置くん";
+      wn.textContent = diff > 0 ? P.name : B.name;
       wn.style.color = diff > 0 ? C.strat : C.bench;
       $("winDiff").textContent = `最終資産の差 ${yen(Math.abs(diff))}円`;
     }
@@ -1016,23 +1152,49 @@ const GAME = /*__GAME_DATA__*/null;
       ["売買回数<br><small>（うち売り）</small>", `${a.n_trades}回（${a.n_sells}）`, `${b.n_trades}回（${b.n_sells}）`, 0],
       ["値差の負担額", yen(a.slippage) + "円", yen(b.slippage) + "円", b.slippage - a.slippage],
     ];
+    $("thS").textContent = P.name; $("thB").textContent = B.name;
     $("resBody").innerHTML = rows.map(([k, x, y, c]) =>
       `<tr><td>${k}</td><td class="num${c > 0 ? " win" : ""}">${x}</td><td class="num${c < 0 ? " win" : ""}">${y}</td></tr>`).join("");
+    renderMlResult();
     $("over").classList.add("show");
     $("again").focus({ preventScroll: true });
   }
   function hideResult() { $("over").classList.remove("show"); }
 
+  // AIくんとランダムくんの差と、「パターンを学べたか」の判定（どの2人を選んでいても出す）
+  function renderMlResult() {
+    const v = ds.ml_verdict;
+    const ai = roster.find((p) => p.char === "ai"), rn = roster.find((p) => p.char === "random");
+    const box = $("mlRes");
+    box.hidden = !(v && ai && rn);
+    if (box.hidden) return;
+    const a = ai.summary, r = rn.summary, d = a.final_equity - r.final_equity;
+    const diff = Math.abs(d) < 1 ? "同じ" : `AIくんが ${signedYen(d)}`;
+    const aucRows = v.periods.map((x) => `<tr><td colspan="3" class="ph label-m">${escapeHtml(x.label)}・${x.days}営業日</td></tr>
+      <tr><td>当たり具合（AUC）</td><td class="num">${x.auc_ai ?? "—"}</td><td class="num">${x.auc_random ?? "—"}</td></tr>`).join("");
+    const sh = v.periods.map((x) => x.auc_shuffled ? `${escapeHtml(x.label)} ${x.auc_shuffled[0]}〜${x.auc_shuffled[2]}（真ん中 ${x.auc_shuffled[1]}）` : "").filter(Boolean).join("<br>");
+    box.innerHTML = `<div class="hd"><span class="vs title-m"><span class="a">AIくん</span> と <span class="r">ランダムくん</span></span>
+        <span class="chip-v label-l ${v.status}">${escapeHtml(v.title)}</span></div>
+      <table class="body-m"><thead><tr><th></th><th class="a title-s">AIくん</th><th class="r title-s">ランダムくん</th></tr></thead><tbody>
+        <tr><td>最終資産</td><td class="num">${yen(a.final_equity)}円</td><td class="num">${yen(r.final_equity)}円</td></tr>
+        <tr><td>損益</td><td class="num">${signedYen(a.pnl)}</td><td class="num">${signedYen(r.pnl)}</td></tr>
+        ${aucRows}</tbody></table>
+      <div class="dt body-s">資産の差: ${diff}。AUC は上がる日ほど高い確率を付けられたか（0.5 = 当てずっぽう）。<br>
+        ${escapeHtml(v.detail)}${sh ? `<br>答えを入れ替えて学んだ ${v.runs}通りの AUC: ${sh}` : ""}</div>`;
+  }
+
   // ---------------- 操作 ----------------
   $("play").addEventListener("click", () => (playing ? pause() : play()));
   $("speeds").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) setSpeed(+b.dataset.speed); });
   $("seek").addEventListener("input", (e) => { seek(+e.target.value); });
-  $("pick").addEventListener("change", (e) => setPlayer(+e.target.value));
+  // 同じ選手を左右に選んだら、もう片方と入れ替える
+  $("pickA").addEventListener("change", (e) => { const a = +e.target.value; setPair(a, a === pickIdx[1] ? pickIdx[0] : pickIdx[1]); });
+  $("pickB").addEventListener("change", (e) => { const b = +e.target.value; setPair(b === pickIdx[0] ? pickIdx[1] : pickIdx[0], b); });
   $("modes").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) setMode(b.dataset.mode); });
   $("showResult").addEventListener("click", showResult);
   $("again").addEventListener("click", () => { hideResult(); seek(0); play(); });
   $("closeRes").addEventListener("click", hideResult);
-  $("change").addEventListener("click", () => { hideResult(); $("pick").focus(); $("pick").scrollIntoView({ block: "center", behavior: "smooth" }); });
+  $("change").addEventListener("click", () => { hideResult(); $("pickA").focus(); $("pickA").scrollIntoView({ block: "center", behavior: "smooth" }); });
   $("over").addEventListener("click", (e) => { if (e.target === $("over")) hideResult(); });
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") hideResult();

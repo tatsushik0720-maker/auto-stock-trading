@@ -29,7 +29,7 @@
 from __future__ import annotations
 
 import math
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import date
 from pathlib import Path
 from typing import Any, Mapping
@@ -83,6 +83,8 @@ class SimResult:
     trades: list[Trade]
     missed_buys: list[MissedBuy]
     state: SimState              # 終了時の口座の状態（保存すれば次回そこから再開できる）
+    # 戦略の判断の根拠 {(日付, 銘柄): info}（機械学習の予想確率など。フォワードテストの記録に使う）
+    decisions: dict = field(default_factory=dict)
 
     def trades_df(self) -> pd.DataFrame:
         df = pd.DataFrame([asdict(t) for t in self.trades],
@@ -166,6 +168,7 @@ def run_simulation(prices: Mapping[str, pd.DataFrame], lot_sizes: Mapping[str, i
     trades: list[Trade] = []
     missed: list[MissedBuy] = []
     records: list[dict] = []
+    decisions: dict = {}
 
     if start_ts is not None:
         all_days = [d for d in all_days if d >= start_ts]
@@ -200,6 +203,8 @@ def run_simulation(prices: Mapping[str, pd.DataFrame], lot_sizes: Mapping[str, i
             ctx = DayContext(symbol=s, date=day, prices=df.iloc[:i + 1], position=acc.shares,
                              extras=extras_by_date.get(day.date(), {}))
             decision = strategy.decide(ctx)
+            if decision.info:
+                decisions[(day, s)] = dict(decision.info)
             if decision.signal is Signal.BUY:
                 acc.pending = Signal.BUY
             elif decision.signal is Signal.SELL and acc.shares > 0:
@@ -219,7 +224,7 @@ def run_simulation(prices: Mapping[str, pd.DataFrame], lot_sizes: Mapping[str, i
              else pd.DataFrame(columns=columns, index=pd.DatetimeIndex([], name="date")))
     portfolio = _portfolio(daily, symbols, before)
     return SimResult(daily=daily, portfolio=portfolio, trades=trades, missed_buys=missed,
-                     state=state)
+                     state=state, decisions=decisions)
 
 
 def _buy(acc: AccountState, day, open_price: float, costs: Costs,

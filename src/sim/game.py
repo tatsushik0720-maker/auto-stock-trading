@@ -15,11 +15,14 @@
     deposited  : 各日の投入総額（初期資金＋積立。全員同じ）
     initial    : 初期資金
     benchmark  : 放置くんの選手データ
-    players    : 戦略くんの候補（1人以上。画面の「相手」で切り替える）
+    players    : ほかの選手（1人以上）。画面では benchmark と合わせた全員から、2人を自由に選んで対戦させる
+    ml_verdict : AIくんとランダムくんがいるとき、「パターンを学べたか」の判定（ml_eval.learned_verdict）
   選手データ:
     id, label（戦略の説明）, equity（各日の資産、円）, twr（入金の影響を除いた指数）,
+    char（キャラ: hold=放置くん / strategy=戦略くん / ai=AIくん / random=ランダムくん）, name（キャラの名前）,
     markers（売買: 日の番号 i・売買・銘柄・口数・種類 entry/exit/topup）,
-    summary（最終資産・損益・最大の落ち込み・売買回数・値差の負担額）
+    summary（最終資産・損益・最大の落ち込み・売買回数・値差の負担額）,
+    ml（AIくん・ランダムくんだけ。毎日の予想確率・持つ基準・学び直しの記録。ml_eval.ml_track）
 """
 
 from __future__ import annotations
@@ -31,7 +34,9 @@ from pathlib import Path
 import pandas as pd
 
 from .evaluate import compute_metrics, twr_index
+from .ml_eval import actual_frames, learned_verdict, parse_probs, period_quality, shuffled_frames
 from .simulator import SimResult
+from .strategies.ml_logistic import LogisticModel, top_features
 
 TEMPLATE = Path(__file__).with_name("game_template.html")
 PLACEHOLDER = "/*__GAME_DATA__*/null"
@@ -47,11 +52,24 @@ def strategy_label(name: str, params: dict) -> str:
     if name == "sma_cooldown":
         return f"移動平均{w}日 {params.get('cooldown', 20)}日あけ"
     if name == "ml_logistic":
-        tag = "（答え入れ替え）" if params.get("shuffle_seed") is not None else ""
-        return f"機械学習 確率{params.get('threshold', 0.55):.0%}以上{tag}"
+        tag = "・答えをランダムに入れ替え" if params.get("shuffle_seed") is not None else ""
+        return f"機械学習 確率{params.get('threshold', 0.55):.0%}以上で持つ{tag}"
     if name == "buy_and_hold":
         return "最初に買って放置"
     return f"{name} {params}" if params else name
+
+
+CHAR_NAMES = {"hold": "放置くん", "strategy": "戦略くん", "ai": "AIくん", "random": "ランダムくん"}
+
+
+def char_of(name: str, params: dict | None = None) -> str:
+    """戦略の名前とパラメータから、画面のキャラを決める。"""
+    params = params or {}
+    if name == "buy_and_hold":
+        return "hold"
+    if name == "ml_logistic":
+        return "random" if params.get("shuffle_seed") is not None else "ai"
+    return "strategy"
 
 
 def markers(result: SimResult, dates: pd.DatetimeIndex) -> list[dict]:
@@ -82,13 +100,14 @@ def markers_from(t: pd.DataFrame, dates: pd.DatetimeIndex) -> list[dict]:
     return out
 
 
-def player(pid: str, label: str, result: SimResult, dates: pd.DatetimeIndex) -> dict:
+def player(pid: str, label: str, result: SimResult, dates: pd.DatetimeIndex,
+           char: str = "strategy", ml: dict | None = None) -> dict:
     pf = result.portfolio.reindex(dates).ffill()
     m = compute_metrics(result)
     twr = twr_index(result.portfolio).reindex(dates).ffill()
-    return {
+    out = {
         "id": pid,
-        "label": label,
+        "label": label, "char": char, "name": CHAR_NAMES[char],
         "equity": [round(float(v)) for v in pf["equity"]],
         "twr": [round(float(v), 5) for v in twr],
         "markers": markers(result, dates),
@@ -100,21 +119,30 @@ def player(pid: str, label: str, result: SimResult, dates: pd.DatetimeIndex) -> 
             "slippage": round(m.slippage), "fee": round(m.fee), "tax": round(m.tax),
         },
     }
+    if ml is not None:
+        out["ml"] = ml
+    return out
 
 
 def dataset(benchmark: SimResult, players: dict[str, SimResult], initial_cash: float,
-            symbols: list[str], benchmark_label: str = "最初に買って放置") -> dict:
-    """1つのモード（リプレイなど）のデータ。players は {表示名: 結果}。"""
+            symbols: list[str], benchmark_label: str = "最初に買って放置",
+            chars: dict[str, str] | None = None, ml: dict[str, dict] | None = None,
+            ml_verdict: dict | None = None) -> dict:
+    """1つのモード（リプレイなど）のデータ。players は {表示名: 結果}。
+    chars は {表示名: キャラ}（書かなければ戦略くん）、ml は {表示名: ml_eval.ml_track の結果}。"""
     if not players:
         raise ValueError("戦略くんの候補が1つもありません")
+    chars, ml = chars or {}, ml or {}
     dates = benchmark.portfolio.index
     return {
         "dates": [d.strftime("%Y-%m-%d") for d in dates],
         "deposited": [round(float(v)) for v in benchmark.portfolio["deposited"]],
         "initial": round(initial_cash),
         "symbols": symbols,
-        "benchmark": player("benchmark", benchmark_label, benchmark, dates),
-        "players": [player(f"p{k}", name, r, dates) for k, (name, r) in enumerate(players.items())],
+        "benchmark": player("benchmark", benchmark_label, benchmark, dates, "hold"),
+        "players": [player(f"p{k}", name, r, dates, chars.get(name, "strategy"), ml.get(name))
+                    for k, (name, r) in enumerate(players.items())],
+        "ml_verdict": ml_verdict,
     }
 
 
@@ -137,9 +165,13 @@ def next_result_day(start: date, now: datetime) -> date:
 
 
 def forward_dataset(folder: Path, benchmark: str, initial_cash: float, symbols: list[str],
-                    start: date, now: datetime) -> dict:
+                    start: date, now: datetime, prices: dict[str, pd.DataFrame] | None = None,
+                    shuffle_runs: int = 20, shuffled: list | None = None) -> dict:
     """forward/log.csv と trades.csv から、画面の「フォワードテスト」モードのデータを作る。
 
+    AIくん・ランダムくん（機械学習の選手）は、log.csv の予想確率と
+    forward/state/<id>.model.json（学んだモデル）から、メーターと学び直しの表示を作る。
+    prices を渡すと、AIくんがパターンを学べたかの判定も入れる（答え合わせに株価を使う）。
     記録がまだ0日分なら {"empty": True, "message": ...} を返す。
     """
     meta = {"kind": "forward", "start": start.isoformat(),
@@ -156,6 +188,46 @@ def forward_dataset(folder: Path, benchmark: str, initial_cash: float, symbols: 
     trades_path = Path(folder) / "trades.csv"
     trades = (pd.read_csv(trades_path, encoding="utf-8-sig", dtype={"戦略id": str})
               if trades_path.exists() else pd.DataFrame(columns=["戦略id"]))
+
+    models = {}
+    for sid in log["戦略id"].unique():
+        mp = Path(folder) / "state" / f"{sid}.model.json"
+        if mp.exists():
+            models[sid] = json.loads(mp.read_text(encoding="utf-8"))
+
+    def char(sid: str) -> str:
+        if sid == benchmark:
+            return "hold"
+        if sid in models:
+            return char_of(models[sid]["strategy"], models[sid]["params"])
+        return "strategy"
+
+    def probs_of(sid: str) -> dict[str, pd.Series]:
+        rows = log[log["戦略id"] == sid]
+        col = rows["予想確率"].fillna("") if "予想確率" in rows else pd.Series("", index=rows.index)
+        by_sym: dict[str, dict] = {}
+        for d, text in zip(rows["日付"], col):
+            for sym, v in parse_probs(text).items():
+                by_sym.setdefault(sym, {})[d] = v
+        return {sym: pd.Series(v, dtype=float).reindex(dates) for sym, v in by_sym.items()}
+
+    def ml_of(sid: str) -> dict | None:
+        if sid not in models:
+            return None
+        m = models[sid]
+        events: dict[int, dict] = {}
+        pos = {d.strftime("%Y-%m-%d"): i for i, d in enumerate(dates)}
+        for mod in m["models"]:
+            i = pos.get(mod.get("first_used") or "")
+            if i is None:
+                continue
+            e = events.setdefault(i, {"i": i, "date": mod["trained"],
+                                      "fresh": mod["first_used"] == mod["trained"], "top": {}})
+            e["top"][mod["symbol"]] = top_features(LogisticModel.from_dict(mod))
+        return {"threshold": m["params"]["threshold"], "horizon": m["params"]["horizon"],
+                "prob": {sym: [None if pd.isna(v) else round(float(v), 4) for v in s]
+                         for sym, s in probs_of(sid).items()},
+                "retrains": [events[i] for i in sorted(events)]}
 
     def one(sid: str) -> dict:
         rows = log[log["戦略id"] == sid].set_index("日付")
@@ -174,8 +246,9 @@ def forward_dataset(folder: Path, benchmark: str, initial_cash: float, symbols: 
         tt = pd.DataFrame({"date": pd.to_datetime(t.get("日付", pd.Series(dtype=str))),
                            "side": t.get("売買"), "symbol": t.get("銘柄"),
                            "shares": t.get("口数")})
-        return {
-            "id": sid, "label": label,
+        c = char(sid)
+        out = {
+            "id": sid, "label": label, "char": c, "name": CHAR_NAMES[c],
             "equity": [round(float(v)) for v in eq], "twr": [round(float(v), 5) for v in twr],
             "markers": markers_from(tt, dates),
             "summary": {
@@ -189,12 +262,30 @@ def forward_dataset(folder: Path, benchmark: str, initial_cash: float, symbols: 
                 "tax": round(float(t["税の精算額"].sum())) if len(t) else 0,
             },
         }
+        ml = ml_of(sid)
+        if ml is not None:
+            out["ml"] = ml
+        return out
 
     ids = list(dict.fromkeys(log["戦略id"]))
     if benchmark not in ids:
         raise ValueError(f"forward/log.csv に比べる相手（{benchmark}）の記録がありません")
     bench_rows = log[log["戦略id"] == benchmark].set_index("日付")
     deposited = bench_rows["投入総額"].astype(float).reindex(dates).ffill().fillna(initial_cash)
+
+    verdict = None
+    ai = next((i for i in ids if char(i) == "ai"), None)
+    rnd = next((i for i in ids if char(i) == "random"), None)
+    if prices is not None and ai and rnd:
+        params = models[ai]["params"]
+        periods = {"fw": (dates[0], None)}
+
+        def quality(sid):
+            return period_quality(actual_frames(probs_of(sid), prices, params["horizon"]), periods)
+
+        frames = shuffled if shuffled is not None else shuffled_frames(params, prices, shuffle_runs)
+        sh = [period_quality(f, periods) for f in frames]
+        verdict = learned_verdict(quality(ai), sh, {"fw": "フォワードテストの期間"}, quality(rnd))
     return {
         **meta,
         "dates": [d.strftime("%Y-%m-%d") for d in dates],
@@ -202,6 +293,7 @@ def forward_dataset(folder: Path, benchmark: str, initial_cash: float, symbols: 
         "initial": round(initial_cash), "symbols": symbols,
         "benchmark": one(benchmark),
         "players": [one(i) for i in ids if i != benchmark],
+        "ml_verdict": verdict,
     }
 
 

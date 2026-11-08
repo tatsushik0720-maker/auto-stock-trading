@@ -92,3 +92,10 @@ forward:
     # 後から戦略を足すときは start に足した日を書く（書かないと上の開始日からさかのぼって動かす）
     - {id: sma25, name: sma_cross, params: {window: 25}}
     - {id: hold, name: buy_and_hold}
+    # AIくん: 機械学習（ロジスティック回帰）。予想の確率が threshold 以上のときだけ持つ。
+    #   学んだモデルは forward/state/ai.model.json に保存し、毎日それを読み込んで予想する。
+    #   3か月ごと（1・4・7・10月の最初の取引日）に、その日までのデータだけで学び直す
+    # ランダムくん: AIくんと同じ設定で、答えをランダムに入れ替えて学ぶ（比較役）
+    # 設定は追加した時点で固定。変えたいときは、ここを書き換えずに別の id で足す
+    - {id: ai, name: ml_logistic, params: {threshold: 0.6}, start: "2026-11-08"}
+    - {id: random, name: ml_logistic, params: {threshold: 0.6, shuffle_seed: 1}, start: "2026-11-08"}

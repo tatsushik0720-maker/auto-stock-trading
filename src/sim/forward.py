@@ -13,7 +13,10 @@
 
 forward/ の中身:
   state/<id>.json      戦略ごとの架空口座の状態（再開に使う。前回分は .bak）
-  log.csv              取引日×戦略ごとの資産・その日の売買・翌取引日の注文・放置との差
+  state/<id>.model.json 機械学習の選手（AIくん・ランダムくん）が学んだモデル。毎日これを読み込んで予想し、
+                       学び直したときだけ書き足す（前回分は .bak）
+  log.csv              取引日×戦略ごとの資産・その日の売買・翌取引日の注文・放置との差・
+                       予想確率と学び直し（機械学習の選手だけ）
   orders.csv           架空の注文（終値で判定した日に記録）
   trades.csv           約定した架空の売買
   execution_check.csv  約定の想定ずれ（本物のお金に移る前に確かめるためのデータ）
@@ -21,7 +24,9 @@ forward/ の中身:
 
 from __future__ import annotations
 
+import json
 import math
+import os
 from dataclasses import dataclass, field
 from datetime import datetime, time
 from pathlib import Path
@@ -32,8 +37,8 @@ from .config import Config, ForwardStrategyConfig
 from .data_loader import JST
 from .game import strategy_label
 from .simulator import Costs, SimResult, TRADE_COLUMNS_JA, run_simulation
-from .state import SimState
-from .strategies import create_strategy
+from .state import SimState, StateError
+from .strategies import Strategy, StrategyError, create_strategy
 
 MARKET_OPEN_JST = time(9, 0)
 # 終値では1単位も買えない見込みで注文を記録しなかったのに、始値が下がって買えた約定
@@ -42,7 +47,9 @@ REVISION_TOLERANCE = 0.005     # 処理済みの日の終値が 0.5% 以上変�
 WEEKDAYS = "月火水木金土日"
 
 LOG_COLUMNS = ["日付", "戦略id", "戦略", "資産", "投入総額", "損益", "その日の売買",
-               "翌取引日の注文", "放置との差", "実行日時"]
+               "翌取引日の注文", "放置との差", "予想確率", "学び直し", "実行日時"]
+FIXED = ("選手の設定は追加した時点で固定です。変えたいときは、config.yaml の forward.strategies に"
+         "別の id の選手として足してください")
 ORDER_COLUMNS = ["記録日時", "戦略id", "銘柄", "合図の日", "合図の日の終値", "注文",
                  "見込み口数", "約定予定"]
 EXEC_COLUMNS = ["約定日", "戦略id", "銘柄", "売買", "合図の日", "合図の日の終値", "約定日の始値",
@@ -64,6 +71,11 @@ class StrategyRun:
     label: str
     result: SimResult | None        # 新しい日がなければ None
     state_path: Path
+    strategy: Strategy | None = None
+
+    @property
+    def model_path(self) -> Path:
+        return self.state_path.with_name(f"{self.spec.id}.model.json")
 
     @property
     def new_days(self) -> list[pd.Timestamp]:
@@ -115,10 +127,22 @@ def run_forward(cfg: Config, prices: dict[str, pd.DataFrame], now: datetime,
             runs.append(StrategyRun(spec, _label(spec), None, path))
             continue
         strategy = create_strategy(spec.name, spec.params)
-        result = run_simulation(prices, lots, strategy, cfg.account.initial_cash,
-                                cfg.account.monthly_deposit, costs, state=state, start=start)
+        model_path = path.with_name(f"{spec.id}.model.json")
+        if hasattr(strategy, "import_models") and model_path.exists():
+            try:   # 学んだモデルを読み込み、それで予想する（学び直す日だけ新しく学ぶ）
+                strategy.import_models(json.loads(model_path.read_text(encoding="utf-8")), spec.id)
+            except (ValueError, KeyError, TypeError) as e:
+                if isinstance(e, StrategyError):
+                    raise ForwardError(str(e)) from None
+                raise ForwardError(f"{spec.id}: 学んだモデルのファイルが読めません: {model_path}（{e}）"
+                                   "。前回分は .bak に残っています") from None
+        try:
+            result = run_simulation(prices, lots, strategy, cfg.account.initial_cash,
+                                    cfg.account.monthly_deposit, costs, state=state, start=start)
+        except StateError as e:
+            raise ForwardError(f"{spec.id}: {e}。{FIXED}") from None
         runs.append(StrategyRun(spec, _label(spec), result if len(result.portfolio) else None,
-                                path))
+                                path, strategy))
 
     report = ForwardReport(run_at=now, runs=runs, benchmark=fwd.benchmark)
     report.days = sorted({d for r in runs for d in r.new_days})
@@ -132,12 +156,15 @@ def run_forward(cfg: Config, prices: dict[str, pd.DataFrame], now: datetime,
         [old_orders, report.orders], ignore_index=True))
     report.log = build_log(runs, fwd.benchmark, report.orders, now)
     if write:
+        _check_header(fwd.dir / "log.csv", LOG_COLUMNS)
         _append_csv(fwd.dir / "log.csv", report.log)
         _append_csv(fwd.dir / "orders.csv", report.orders)
         _append_csv(fwd.dir / "trades.csv", report.trades)
         _append_csv(fwd.dir / "execution_check.csv", report.executions)
         for r in runs:      # 状態は最後に保存する（途中で失敗したら次回やり直せるように）
             if r.result is not None:
+                if hasattr(r.strategy, "export_models"):
+                    _save_json(r.model_path, r.strategy.export_models())
                 r.result.state.save(r.state_path)
     return report
 
@@ -168,6 +195,46 @@ def check_revisions(sid: str, state: SimState, prices: dict[str, pd.DataFrame]) 
 
 def _label(spec: ForwardStrategyConfig) -> str:
     return strategy_label(spec.name, spec.params)
+
+
+def _save_json(path: Path, data: dict) -> None:
+    """壊れにくい保存: 一時ファイルに書いてから置き換え、前回分は .bak に残す。"""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    text = json.dumps(data, ensure_ascii=False, indent=1) + "\n"
+    if path.exists() and path.read_text(encoding="utf-8") == text:
+        return
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(text, encoding="utf-8", newline="\n")
+    if path.exists():
+        os.replace(path, path.with_suffix(path.suffix + ".bak"))
+    os.replace(tmp, path)
+
+
+def _probs_text(result: SimResult, day: pd.Timestamp) -> str:
+    """その日の予想確率（機械学習の選手だけ）。例 "1321.T:0.6123 / 1306.T:0.5871" """
+    parts = []
+    for (d, sym), info in result.decisions.items():
+        if d == day and info.get("prob") is not None:
+            parts.append(f"{sym}:{info['prob']:.4f}")
+    return " / ".join(parts)
+
+
+def _retrain_text(strategy, day: pd.Timestamp) -> str:
+    """その日に学んだモデル（学び直し、または最初の学習）と、重視した特徴の上位3つ。"""
+    first_used = getattr(strategy, "first_used", None)
+    if not first_used:
+        return ""
+    from .strategies.ml_logistic import top_features
+    iso = day.date().isoformat()
+    parts = []
+    for (sym, trained), used in sorted(first_used.items()):
+        if used != iso:
+            continue
+        model = strategy.trained.get((sym, trained)) or strategy.saved.get((sym, trained))
+        kind = "学び直し" if trained == iso else "最初の学習"
+        top = "・".join(f"{t['name']}{'↑' if t['sign'] > 0 else '↓'}" for t in top_features(model))
+        parts.append(f"{sym} {kind}（{trained}までのデータ。重視: {top}）")
+    return " / ".join(parts)
 
 
 # ============================================================
@@ -304,7 +371,10 @@ def build_log(runs: list[StrategyRun], benchmark: str, orders: pd.DataFrame,
                                        for x in t.itertuples()) or "なし",
                 "翌取引日の注文": " / ".join(f"{x.銘柄} {x.注文} {x.見込み口数}口"
                                         for x in o.itertuples()) or "なし",
-                "放置との差": diff, "実行日時": _ts(now),
+                "放置との差": diff,
+                "予想確率": _probs_text(r.result, day),
+                "学び直し": _retrain_text(r.strategy, day),
+                "実行日時": _ts(now),
             })
     return _by_date(pd.DataFrame(rows, columns=LOG_COLUMNS), "日付")
 
@@ -371,6 +441,18 @@ def _read_csv(path: Path, columns: list[str]) -> pd.DataFrame:
     return pd.read_csv(path, encoding="utf-8-sig", dtype=str, keep_default_na=False)
 
 
+def _check_header(path: Path, columns: list[str]) -> None:
+    """追記する前に、今あるファイルの列が同じか確かめる（ずれたまま書き足さないため）。"""
+    if not path.exists():
+        return
+    with path.open(encoding="utf-8-sig") as f:
+        head = f.readline().rstrip("\r\n").split(",")
+    if head != columns:
+        raise ForwardError(
+            f"{path.name} の列が今のプログラムと違います（ファイル: {', '.join(head)}）。"
+            "列を足すプログラムの変更があったときは、古い記録を別名に移してから実行してください")
+
+
 def _append_csv(path: Path, df: pd.DataFrame) -> None:
     """追記（初回は見出しつきで作る）。Excel で文字化けしないよう BOM 付き UTF-8。"""
     if df is None or df.empty:
@@ -396,23 +478,58 @@ def write_game_page(cfg: Config, prices: dict[str, pd.DataFrame], now: datetime,
     過去のリプレイ: フォワードテストと同じ戦略で、config の period（2018年〜）を通しで動かした結果
     フォワードテスト: forward/log.csv と trades.csv の記録（0日分なら「開始前」と表示）
     """
-    from .game import dataset, forward_dataset, write_game
+    from .game import char_of, dataset, forward_dataset, write_game
+    from .ml_eval import frames_of, learned_verdict, ml_track, period_quality, shuffled_frames
 
     fwd = cfg.forward
     lots = {s.code: s.lot_size for s in cfg.symbols}
     costs = Costs(cfg.costs.fee_rate, cfg.costs.slippage_rate, cfg.costs.tax_rate)
-    start = pd.Timestamp(cfg.period.start)
-    hist = {s: prices[s][prices[s].index >= start] for s in lots}
-    sims = {}
+    prices = {s: prices[s] for s in lots}
+    # 売買と入金は period の初日から。それより前のデータは、平均や学習に使うだけ
+    start = cfg.period.start
+    sims, strats = {}, {}
     for spec in fwd.strategies:
-        sims[spec.id] = run_simulation(hist, lots, create_strategy(spec.name, spec.params),
-                                       cfg.account.initial_cash, cfg.account.monthly_deposit,
-                                       costs)
+        strats[spec.id] = create_strategy(spec.name, spec.params)
+        sims[spec.id] = run_simulation(prices, lots, strats[spec.id], cfg.account.initial_cash,
+                                       cfg.account.monthly_deposit, costs, start=start)
     labels = {spec.id: _label(spec) for spec in fwd.strategies}
+    chars = {labels[s.id]: char_of(s.name, s.params) for s in fwd.strategies}
+    dates = sims[fwd.benchmark].portfolio.index
+    ml = {labels[i]: ml_track(st, prices, dates) for i, st in strats.items()
+          if hasattr(st, "walk_forward")}
+
+    # AIくんとランダムくんがいれば「パターンを学べたか」を判定する（compare_ml.py と同じ物差し）
+    verdict, sh = None, None
+    ai = next((s for s in fwd.strategies if char_of(s.name, s.params) == "ai"), None)
+    rnd = next((s for s in fwd.strategies if char_of(s.name, s.params) == "random"), None)
+    runs = cfg.ml_comparison.shuffle_runs if cfg.ml_comparison else 20
+    if ai and rnd:
+        if cfg.comparison:
+            c = cfg.comparison
+            periods = {"sel": (c.select_period.start, c.select_period.end),
+                       "chk": (c.check_period.start, c.check_period.end)}
+            names = {"sel": "選ぶ期間", "chk": "確かめる期間"}
+        else:
+            periods, names = {"all": (start, None)}, {"all": "全期間"}
+        span = {t: _span(dates, a, b) for t, (a, b) in periods.items()}
+        period_labels = {t: f"{names[t]}（{span[t]}）" for t in periods}
+        sh_frames = shuffled_frames(strats[ai.id].params(), prices, runs)
+        sh = sh_frames
+        verdict = learned_verdict(period_quality(frames_of(strats[ai.id], prices), periods),
+                                  [period_quality(f, periods) for f in sh_frames], period_labels,
+                                  period_quality(frames_of(strats[rnd.id], prices), periods))
     symbols = list(lots)
     replay = dataset(sims[fwd.benchmark],
                      {labels[i]: r for i, r in sims.items() if i != fwd.benchmark},
-                     cfg.account.initial_cash, symbols, labels[fwd.benchmark])
+                     cfg.account.initial_cash, symbols, labels[fwd.benchmark],
+                     chars=chars, ml=ml, ml_verdict=verdict)
     forward = forward_dataset(fwd.dir, fwd.benchmark, cfg.account.initial_cash, symbols,
-                              fwd.start, now)
+                              fwd.start, now, prices=prices, shuffle_runs=runs, shuffled=sh)
     return write_game(path or fwd.dir / "game.html", replay, forward)
+
+
+def _span(dates: pd.DatetimeIndex, a, b) -> str:
+    inside = dates[(dates >= pd.Timestamp(a)) & ((dates <= pd.Timestamp(b)) if b else True)]
+    if not len(inside):
+        return "-"
+    return f"{inside[0]:%Y/%m/%d}〜{inside[-1]:%Y/%m/%d}"

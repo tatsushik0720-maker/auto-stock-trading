@@ -68,11 +68,10 @@ def run(args) -> int:
         raise ConfigError("config.yaml に forward の項目がありません（README の「フォワードテスト」を参照）")
     now = datetime.now(JST)
 
-    # 平均を出すために、開始日より前のデータも読む
+    # 平均や学習のために、開始日より前のデータも読む。対戦画面の「過去のリプレイ」は
+    # バックテストの開始日（period.start）から売買するので、その前の助走期間の分も読む
     warmup = max(create_strategy(s.name, s.params).warmup_days() for s in fwd.strategies)
-    data_start = fwd.start - timedelta(days=int(warmup * 1.5) + 30)
-    # 対戦画面の「過去のリプレイ」用に、バックテストの開始日からのデータも読む
-    data_start = min(data_start, cfg.period.start)
+    data_start = min(fwd.start, cfg.period.start) - timedelta(days=int(warmup * 1.5) + 30)
     prices = load_all([s.code for s in cfg.symbols], data_start, None, cfg.paths.data_dir)
     for pr in prices.values():
         for w in pr.warnings:

@@ -33,6 +33,7 @@ from compare import BENCH, build_table  # noqa: E402
 from sim.config import ConfigError, load_config  # noqa: E402
 from sim.data_loader import DataError, load_all, summarize  # noqa: E402
 from sim.evaluate import period_metrics  # noqa: E402
+from sim.ml_eval import auc, learned_verdict, ml_track, prediction_quality  # noqa: E402,F401
 from sim.game import dataset, strategy_label as label, write_game  # noqa: E402
 from sim.simulator import Costs, run_simulation  # noqa: E402
 from sim.strategies import StrategyError, create_strategy  # noqa: E402
@@ -146,44 +147,23 @@ def main(argv: list[str] | None = None) -> int:
     players = {best: results[best]}
     players.update({n: results[n] for n in strategies if n != best})
     players[SMA] = results[SMA]
-    players[f"{best}（答え入れ替え・{runs}通りの真ん中）"] = shuffled[mid][1]
+    rnd_name = f"{best}（答え入れ替え・{runs}通りの真ん中）"
+    players[rnd_name] = shuffled[mid][1]
+    # AIくん（機械学習）・ランダムくん（答え入れ替え）として、メーターと判定も出す
+    chars = {n: "ai" for n in strategies}
+    chars[rnd_name] = "random"
+    dates = results[BENCH].portfolio.index
+    ml = {n: ml_track(strategies[n], prices, dates) for n in strategies}
+    ml[rnd_name] = ml_track(shuffled[mid][0], prices, dates)
+    labels_ = {"選": f"選ぶ期間（{s0.start:%Y/%m/%d}〜{s0.end:%Y/%m/%d}）",
+               "確": f"確かめる期間（{c0.start:%Y/%m/%d}〜{c0.end:%Y/%m/%d}）"}
+    ml_v = learned_verdict(real_q, list(sh_q.values()), labels_, sh_q[mid])
     game = write_game(out / "game_compare_ml.html",
                       dataset(results[BENCH], players, cfg.account.initial_cash,
-                              [s.code for s in cfg.symbols]))
+                              [s.code for s in cfg.symbols], chars=chars, ml=ml, ml_verdict=ml_v))
     print(f"\n出力: {out / 'compare_ml.csv'}, {out / 'compare_ml_shuffle.csv'}, "
           f"{out / 'compare_ml.txt'}, {game}")
     return 0
-
-
-# ============================================================
-# 予想の当たり具合
-# ============================================================
-
-def auc(prob: np.ndarray, actual: np.ndarray) -> float:
-    """上がった日に付けた確率が、上がらなかった日より高い組の割合（同じ値は半分と数える）。"""
-    pos, neg = prob[actual == 1], prob[actual == 0]
-    if len(pos) == 0 or len(neg) == 0:
-        return float("nan")
-    ranks = pd.Series(np.r_[pos, neg]).rank().to_numpy()
-    return float((ranks[:len(pos)].sum() - len(pos) * (len(pos) + 1) / 2) / (len(pos) * len(neg)))
-
-
-def prediction_quality(strat, prices: dict[str, pd.DataFrame], periods: dict) -> dict:
-    """期間ごとの AUC・持つと判断した日の上昇日の割合・全日の上昇日の割合（全銘柄まとめて）。"""
-    frames = [strat.walk_forward(df, sym) for sym, df in prices.items()]
-    out = {}
-    for tag, (a, b) in periods.items():
-        parts = []
-        for f in frames:
-            f = f.loc[pd.Timestamp(a):(pd.Timestamp(b) if b else None)].dropna()
-            parts.append(f)
-        f = pd.concat(parts)
-        p, y = f["prob"].to_numpy(), f["actual"].to_numpy()
-        held = p >= strat.threshold
-        out[tag] = {"auc": auc(p, y), "n": len(y), "base": float(y.mean()) if len(y) else np.nan,
-                    "held_up": float(y[held].mean()) if held.any() else np.nan,
-                    "held_share": float(held.mean()) if len(y) else np.nan}
-    return out
 
 
 def control_table(real_sel, real_chk, real_q, sh_sel, sh_chk, sh_q) -> pd.DataFrame:

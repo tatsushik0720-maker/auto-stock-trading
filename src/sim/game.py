@@ -213,7 +213,47 @@ def render(replay: dict, forward: dict | None = None) -> str:
 
 
 def write_game(path: Path, replay: dict, forward: dict | None = None) -> Path:
+    """画面を書き出す。隣にアプリのアイコンと manifest（ホーム画面に追加したときの名前・色）も置く。"""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(render(replay, forward), encoding="utf-8")
+    manifest = path.with_suffix(".webmanifest")
+    html = render(replay, forward).replace(MANIFEST_PLACEHOLDER, manifest.name)
+    path.write_text(html, encoding="utf-8")
+    write_app_files(path.parent, path.name, manifest.name)
     return path
+
+
+# ============================================================
+# アプリのアイコンと manifest
+# ============================================================
+
+ASSETS = Path(__file__).with_name("assets")
+ICONS = ["icon-180.png", "icon-192.png", "icon-512.png", "icon-maskable-512.png"]
+MANIFEST_PLACEHOLDER = "__MANIFEST_HREF__"
+APP_NAME, APP_SHORT = "戦略くん VS 放置くん", "戦略VS放置"
+
+
+def write_app_files(folder: Path, page: str, manifest_name: str) -> None:
+    """アイコン（scripts/make_icons.py で作ったもの）と manifest を folder に置く。
+    中身が同じなら書き直さない（毎日の実行でコミットに余計な変更を出さないため）。"""
+    for name in ICONS:
+        src, dst = ASSETS / name, folder / name
+        if not src.exists():
+            raise FileNotFoundError(f"アイコンがありません: {src}（python scripts/make_icons.py で作れます）")
+        if not dst.exists() or dst.read_bytes() != src.read_bytes():
+            dst.write_bytes(src.read_bytes())
+    manifest = {
+        "name": APP_NAME, "short_name": APP_SHORT, "lang": "ja",
+        "start_url": f"./{page}", "scope": "./", "display": "standalone",
+        "background_color": "#111418", "theme_color": "#111418",
+        "icons": [
+            {"src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+            {"src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+            {"src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png",
+             "purpose": "maskable"},
+        ],
+    }
+    text = json.dumps(manifest, ensure_ascii=False, indent=2) + "\n"
+    dst = folder / manifest_name
+    if not dst.exists() or dst.read_text(encoding="utf-8") != text:
+        dst.write_text(text, encoding="utf-8", newline="\n")

@@ -190,6 +190,9 @@ https://tatsushik0720-maker.github.io/auto-stock-trading/forward/game.html
 ```
 
 iPhone の Safari で開き、共有ボタン →「ホーム画面に追加」でアプリのように開けます。
+アイコンは `scripts/make_icons.py` で描いたもの（`src/sim/assets/`）で、画面を書き出すたびに
+同じフォルダへアイコンと manifest（ホーム画面での名前「戦略VS放置」と色）を置きます。
+アイコンを描き直したら `python scripts/make_icons.py` を実行します。
 push してから表示が変わるまで、1〜2分かかります。
 
 ### 約定の想定ずれ（execution_check.csv）

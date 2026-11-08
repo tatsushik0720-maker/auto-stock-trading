@@ -83,3 +83,21 @@ def test_start_uses_earlier_days_only_for_signals():
     assert strat.trades[0].date.strftime("%Y-%m-%d") == "2024-01-09"
     assert strat.trades[0].side == "買い"
     assert bench.trades[0].date.strftime("%Y-%m-%d") == "2024-01-09"
+
+
+def test_write_game_places_icons_and_manifest(tmp_path):
+    bench, strat = runs()
+    page = write_game(tmp_path / "game.html", dataset(bench, {"移動平均2日": strat}, 1000, ["X"]))
+    html = page.read_text(encoding="utf-8")
+    assert '<link rel="manifest" href="game.webmanifest">' in html
+    assert '<link rel="apple-touch-icon" href="icon-180.png">' in html
+    manifest = json.loads((tmp_path / "game.webmanifest").read_text(encoding="utf-8"))
+    assert manifest["start_url"] == "./game.html" and manifest["display"] == "standalone"
+    for icon in manifest["icons"] + [{"src": "icon-180.png"}]:
+        assert (tmp_path / icon["src"]).stat().st_size > 1000
+    from PIL import Image
+    assert Image.open(tmp_path / "icon-180.png").size == (180, 180)
+    # 2回目は中身が同じなのでファイルを書き直さない
+    before = (tmp_path / "icon-512.png").stat().st_mtime_ns
+    write_game(tmp_path / "game.html", dataset(bench, {"移動平均2日": strat}, 1000, ["X"]))
+    assert (tmp_path / "icon-512.png").stat().st_mtime_ns == before

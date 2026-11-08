@@ -66,6 +66,13 @@ class ComparisonConfig:
 
 
 @dataclass(frozen=True)
+class MlComparisonConfig:
+    """機械学習の戦略の比べ方（compare_ml.py 用）。期間は comparison と同じものを使う。"""
+    candidates: tuple[StrategyConfig, ...]   # 選ぶ期間でこの中から一番良いものを選ぶ
+    shuffle_runs: int                        # 答えを入れ替えた版を何通り作るか
+
+
+@dataclass(frozen=True)
 class ForwardStrategyConfig:
     """フォワードテストで動かす戦略1つ分。id は保存ファイルの名前に使う。"""
     id: str
@@ -93,6 +100,7 @@ class Config:
     paths: PathConfig
     comparison: ComparisonConfig | None = None   # 書いていなければ None
     forward: ForwardConfig | None = None         # 書いていなければ None
+    ml_comparison: MlComparisonConfig | None = None  # 書いていなければ None
 
 
 # ------------------------------------------------------------
@@ -129,6 +137,7 @@ def parse_config(raw: Any, base_dir: Path = Path(".")) -> Config:
         paths=_parse_paths(raw.get("paths", {}), base_dir),
         comparison=_parse_comparison(raw.get("comparison")),
         forward=_parse_forward(raw.get("forward"), base_dir),
+        ml_comparison=_parse_ml_comparison(raw.get("ml_comparison")),
     )
 
 
@@ -249,6 +258,24 @@ def _parse_comparison(raw: Any) -> ComparisonConfig | None:
             raise ConfigError(f"comparison.candidates に同じ戦略が2回あります: {c.name} {c.params}")
         seen.add(key)
     return ComparisonConfig(select_period=select, check_period=check, candidates=cands)
+
+
+def _parse_ml_comparison(raw: Any) -> MlComparisonConfig | None:
+    if raw is None:
+        return None
+    raw = _require_dict(raw, "ml_comparison")
+    items = raw.get("candidates")
+    if not isinstance(items, list) or not items:
+        raise ConfigError("ml_comparison.candidates に比べる機械学習の戦略を1つ以上書いてください")
+    cands = tuple(_parse_strategy(c) for c in items)
+    for c in cands:
+        if "shuffle_seed" in c.params:
+            raise ConfigError("ml_comparison.candidates には shuffle_seed を書かないでください"
+                              "（答えを入れ替えた版は shuffle_runs の数だけ自動で作ります）")
+    runs = raw.get("shuffle_runs", 20)
+    if isinstance(runs, bool) or not isinstance(runs, int) or not 1 <= runs <= 200:
+        raise ConfigError(f"ml_comparison.shuffle_runs は 1〜200 の整数にしてください（今: {runs!r}）")
+    return MlComparisonConfig(candidates=cands, shuffle_runs=runs)
 
 
 _ID_CHARS = set("abcdefghijklmnopqrstuvwxyz0123456789_-")

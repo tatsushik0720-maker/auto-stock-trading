@@ -64,6 +64,22 @@ comparison:
     - {name: sma_cooldown, params: {window: 75, cooldown: 20}}
     - {name: sma_cooldown, params: {window: 200, cooldown: 20}}
 
+# 機械学習の戦略の比べ方（python compare_ml.py で使う）
+# 期間は上の comparison と同じ。候補の中から選ぶ期間で一番良いものを選び、確かめる期間で試す。
+# ml_logistic のパラメータ:
+#   threshold      予想の確率がこれ以上のときだけ持つ（0.55 = 55%）
+#   horizon        何営業日後に上がったかを答えにするか（既定 5）
+#   retrain_months 何か月ごとに学び直すか（既定 3。その時点までのデータだけで学ぶ）
+#   min_train      学ぶのに最低限必要な日数（既定 500。足りないあいだは様子見）
+ml_comparison:
+  candidates:
+    - {name: ml_logistic, params: {threshold: 0.50}}
+    - {name: ml_logistic, params: {threshold: 0.55}}
+    - {name: ml_logistic, params: {threshold: 0.60}}
+  # 比べるための対照: 答えをランダムに入れ替えて学ばせた版を何通り作るか
+  # 本物がこの全部より良くなければ「パターンは見つからなかった」と判定する
+  shuffle_runs: 20
+
 # フォワードテスト（python forward.py で使う。毎日1回、平日の夕方に実行する）
 # 銘柄・資金・積立・コストは上の設定をそのまま使う。始めたあとに上の設定を変えると、
 # 保存した口座と合わなくなるため forward.py はエラーで止まる（混ぜないため）。

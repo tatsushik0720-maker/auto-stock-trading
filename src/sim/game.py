@@ -46,6 +46,9 @@ def strategy_label(name: str, params: dict) -> str:
         return f"移動平均{w}日 ±{params.get('band', 0.02):.0%}帯"
     if name == "sma_cooldown":
         return f"移動平均{w}日 {params.get('cooldown', 20)}日あけ"
+    if name == "ml_logistic":
+        tag = "（答え入れ替え）" if params.get("shuffle_seed") is not None else ""
+        return f"機械学習 確率{params.get('threshold', 0.55):.0%}以上{tag}"
     if name == "buy_and_hold":
         return "最初に買って放置"
     return f"{name} {params}" if params else name

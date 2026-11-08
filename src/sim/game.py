@@ -340,7 +340,7 @@ def write_app_files(folder: Path, page: str, manifest_name: str) -> None:
     manifest = {
         "name": APP_NAME, "short_name": APP_SHORT, "lang": "ja",
         "start_url": f"./{page}", "scope": "./", "display": "standalone",
-        "background_color": "#111418", "theme_color": "#111418",
+        "background_color": "#f2f2f7", "theme_color": "#f2f2f7",
         "icons": [
             {"src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
             {"src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},

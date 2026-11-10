@@ -1,0 +1,70 @@
+{
+  "version": 1,
+  "last_date": "2026-11-09",
+  "equity": 500000.0,
+  "deposited": 500000.0,
+  "settings": {
+    "symbols": {
+      "1321.T": 10,
+      "1306.T": 10
+    },
+    "initial_cash": 500000.0,
+    "monthly_deposit": 10000.0,
+    "costs": {
+      "fee_rate": 0.0,
+      "slippage_rate": 0.001,
+      "tax_rate": 0.0
+    },
+    "strategy": {
+      "name": "ml_logistic",
+      "params": {
+        "threshold": 0.6,
+        "horizon": 5,
+        "retrain_months": 3,
+        "min_train": 500,
+        "l2": 1.0
+      }
+    }
+  },
+  "accounts": {
+    "1321.T": {
+      "symbol": "1321.T",
+      "lot": 10,
+      "cash": 250000.0,
+      "deposited": 250000.0,
+      "shares": 0,
+      "cost": 0.0,
+      "avg_cost": 0.0,
+      "last_month": [
+        2026,
+        11
+      ],
+      "pending": "BUY",
+      "last_date": "2026-11-09",
+      "last_close": 611.0
+    },
+    "1306.T": {
+      "symbol": "1306.T",
+      "lot": 10,
+      "cash": 250000.0,
+      "deposited": 250000.0,
+      "shares": 0,
+      "cost": 0.0,
+      "avg_cost": 0.0,
+      "last_month": [
+        2026,
+        11
+      ],
+      "pending": "BUY",
+      "last_date": "2026-11-09",
+      "last_close": 402.1000061035156
+    }
+  },
+  "tax": {
+    "rate": 0.0,
+    "year": 2026,
+    "realized": 0.0,
+    "paid": 0.0,
+    "by_year": {}
+  }
+}

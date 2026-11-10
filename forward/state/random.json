@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "last_date": "2026-11-09",
+  "last_date": "2026-11-10",
   "equity": 500000.0,
   "deposited": 500000.0,
   "settings": {
@@ -41,8 +41,8 @@
         11
       ],
       "pending": null,
-      "last_date": "2026-11-09",
-      "last_close": 611.0
+      "last_date": "2026-11-10",
+      "last_close": 629.7999877929688
     },
     "1306.T": {
       "symbol": "1306.T",
@@ -57,8 +57,8 @@
         11
       ],
       "pending": null,
-      "last_date": "2026-11-09",
-      "last_close": 402.1000061035156
+      "last_date": "2026-11-10",
+      "last_close": 410.5
     }
   },
   "tax": {

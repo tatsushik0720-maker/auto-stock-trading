@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "last_date": "2026-11-09",
-  "equity": 500000.0,
+  "last_date": "2026-11-10",
+  "equity": 499592.1488079835,
   "deposited": 500000.0,
   "settings": {
     "symbols": {
@@ -24,34 +24,34 @@
     "1321.T": {
       "symbol": "1321.T",
       "lot": 10,
-      "cash": 250000.0,
+      "cash": 3976.217234497104,
       "deposited": 250000.0,
-      "shares": 0,
-      "cost": 0.0,
-      "avg_cost": 0.0,
+      "shares": 390,
+      "cost": 246023.7827655029,
+      "avg_cost": 630.8302122192382,
       "last_month": [
         2026,
         11
       ],
       "pending": "BUY",
-      "last_date": "2026-11-09",
-      "last_close": 611.0
+      "last_date": "2026-11-10",
+      "last_close": 629.7999877929688
     },
     "1306.T": {
       "symbol": "1306.T",
       "lot": 10,
-      "cash": 250000.0,
+      "cash": 3693.9363342285505,
       "deposited": 250000.0,
-      "shares": 0,
-      "cost": 0.0,
-      "avg_cost": 0.0,
+      "shares": 600,
+      "cost": 246306.06366577145,
+      "avg_cost": 410.5101061096191,
       "last_month": [
         2026,
         11
       ],
       "pending": "BUY",
-      "last_date": "2026-11-09",
-      "last_close": 402.1000061035156
+      "last_date": "2026-11-10",
+      "last_close": 410.5
     }
   },
   "tax": {

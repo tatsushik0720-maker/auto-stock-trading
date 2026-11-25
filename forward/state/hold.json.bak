@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "last_date": "2026-11-19",
-  "equity": 490673.1656536866,
+  "last_date": "2026-11-20",
+  "equity": 469256.1704144288,
   "deposited": 500000.0,
   "settings": {
     "symbols": {
@@ -34,8 +34,8 @@
         11
       ],
       "pending": "BUY",
-      "last_date": "2026-11-19",
-      "last_close": 619.7000122070312
+      "last_date": "2026-11-20",
+      "last_close": 589.4000244140625
     },
     "1306.T": {
       "symbol": "1306.T",
@@ -50,8 +50,8 @@
         11
       ],
       "pending": "BUY",
-      "last_date": "2026-11-19",
-      "last_close": 402.20001220703125
+      "last_date": "2026-11-20",
+      "last_close": 386.20001220703125
     }
   },
   "tax": {
